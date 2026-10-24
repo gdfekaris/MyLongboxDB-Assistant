@@ -29,6 +29,9 @@ dependencies = [
 name = "assistant-app"
 version = "0.1.0"
 dependencies = [
+ "assistant-core",
+ "assistant-keys",
+ "assistant-net",
  "gtk4",
  "libadwaita",
  "relm4",

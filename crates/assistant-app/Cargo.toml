@@ -15,6 +15,9 @@ path = "src/main.rs"
 workspace = true
 
 [dependencies]
+assistant-core = { path = "../assistant-core", version = "0.1.0" }
+assistant-keys = { path = "../assistant-keys", version = "0.1.0" }
+assistant-net = { path = "../assistant-net", version = "0.1.0" }
 adw = { package = "libadwaita", version = "0.9" }
 gtk = { package = "gtk4", version = "0.11", features = ["gnome_49"] }
 relm4 = { version = "0.11", default-features = false, features = ["macros", "libadwaita", "gnome_49"] }
