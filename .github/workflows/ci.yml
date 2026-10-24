@@ -41,7 +41,26 @@ jobs:
       # audits are imported, or be listed as accepted as it was.
       - run: cargo vet --locked
       - name: Test crates that need no GTK
-        run: cargo test --locked -p assistant-core
+        run: cargo test --locked -p assistant-core -p assistant-keys -p assistant-net
+      - name: The embedded root certificates are the ones listed
+        working-directory: crates/assistant-net/src/roots
+        run: sha256sum --check --strict SHA256SUMS
+      # Cloudflare may move either host to an authority the app does not
+      # trust, which would stop the app connecting; this says so early.
+      - name: The hosts' certificates lead to the app's roots
+        continue-on-error: true
+        run: |
+          for f in crates/assistant-net/src/roots/*.der; do
+              openssl x509 -inform der -in "$f"
+          done > "$RUNNER_TEMP/roots.pem"
+          for host in api.anthropic.com openrouter.ai; do
+              if ! openssl s_client -connect "$host:443" -servername "$host" -tls1_3 \
+                  -CAfile "$RUNNER_TEMP/roots.pem" -no-CApath -no-CAstore \
+                  -verify_return_error < /dev/null > /dev/null 2>&1; then
+                  echo "::warning::$host no longer chains to one of the app's root certificates"
+                  exit 1
+              fi
+          done
 
   contract:
     name: Exports import into MyLongboxDB

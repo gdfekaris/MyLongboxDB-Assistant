@@ -1,0 +1,21 @@
+[package]
+name = "assistant-net"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+assistant-keys = { path = "../assistant-keys", version = "0.1.0" }
+# The one HTTP client. Without its defaults it brings no root store and
+# no crypto provider; the app supplies both.
+ureq = { version = "3.5.0", default-features = false, features = ["rustls-no-provider"] }
+rustls = { version = "0.23.46", default-features = false, features = ["std", "ring"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+zeroize = "1.9.1"

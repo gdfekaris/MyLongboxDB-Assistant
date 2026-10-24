@@ -59,7 +59,7 @@ deny = [
     { name = "hickory-proto" },
     # TLS
     { name = "rustls", wrappers = ["ureq", "assistant-net"], reason = "the one approved TLS library, through the HTTP client only" },
-    { name = "rustls-webpki", wrappers = ["rustls", "assistant-net"], reason = "rustls's certificate checks" },
+    { name = "rustls-webpki", wrappers = ["rustls"], reason = "rustls's certificate checks" },
     { name = "ring", wrappers = ["rustls", "rustls-webpki"], reason = "rustls's approved crypto provider" },
     # Only the root certificates embedded in the HTTP crate are trusted.
     { name = "webpki-roots" },

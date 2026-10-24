@@ -98,6 +98,20 @@ authors. The list grows as the app is built.
   rustls, and ring, and allows those only inside the app's HTTP crate.
   No other root-certificate store or crypto provider may be pulled in.
   Verify with `cargo deny check`.
+- **Two hosts, nine certificate authorities.** The network crate,
+  `crates/assistant-net`, can address only `api.anthropic.com` and
+  `openrouter.ai` (the `HOSTS` constant in `src/http.rs`), over HTTPS on
+  port 443, and checks every request again just before it is sent. It
+  follows no redirects, ignores proxy settings in the environment, and
+  caps the size and time of each exchange. TLS is rustls with ring,
+  limited to TLS 1.3, and trusts only the root certificates in
+  `src/roots/`: those of Google Trust Services, Let's Encrypt, and
+  SSL.com, the three authorities Cloudflare, which serves both hosts,
+  issues from. A certificate from any other authority is refused, even
+  one a browser would accept. Verify the certificates with
+  `sha256sum -c SHA256SUMS` in `crates/assistant-net/src/roots/`,
+  comparing the fingerprints with Mozilla's root store, and the rest with
+  `cargo test -p assistant-net`.
 - **Every dependency is reviewed or deliberately accepted.** cargo-vet
   records, in `build-aux/supply-chain/`, which crates were audited by
   organisations whose audits are imported (Mozilla, Google, the Bytecode
