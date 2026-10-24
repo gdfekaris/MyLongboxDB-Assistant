@@ -8,6 +8,9 @@
 
 use gtk::glib;
 
+/// The app's translation domain, which names its catalogues.
+pub const DOMAIN: &str = "mylongboxdb-assistant";
+
 /// `msgid` in the reader's language.
 pub fn gettext(msgid: &str) -> String {
     glib::dgettext(None, msgid).into()

@@ -102,6 +102,14 @@ criteria = "safe-to-deploy"
 version = "0.11.3"
 criteria = "safe-to-deploy"
 
+[[exemptions.enumflags2]]
+version = "0.7.12"
+criteria = "safe-to-deploy"
+
+[[exemptions.enumflags2_derive]]
+version = "0.7.12"
+criteria = "safe-to-deploy"
+
 [[exemptions.field-offset]]
 version = "0.3.6"
 criteria = "safe-to-deploy"
@@ -242,6 +250,10 @@ criteria = "safe-to-deploy"
 version = "0.3.106"
 criteria = "safe-to-deploy"
 
+[[exemptions.landlock]]
+version = "0.4.7"
+criteria = "safe-to-deploy"
+
 [[exemptions.libadwaita]]
 version = "0.9.2"
 criteria = "safe-to-deploy"
@@ -352,6 +364,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.rustls-webpki]]
 version = "0.103.10"
+criteria = "safe-to-deploy"
+
+[[exemptions.seccompiler]]
+version = "0.5.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.simd-adler32]]

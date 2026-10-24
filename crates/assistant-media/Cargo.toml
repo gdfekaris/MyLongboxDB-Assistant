@@ -19,5 +19,10 @@ moxcms = "0.8.1"
 # behind a feature. The Flatpak builds libheif with its HEVC decoder.
 libheif-rs = { version = "3.0.0", default-features = false, features = ["v1_20"], optional = true }
 
+[dev-dependencies]
+# The app decodes photos on confined threads; tests show every decoder
+# still works there.
+assistant-sandbox = { path = "../assistant-sandbox", version = "0.1.0" }
+
 [features]
 heic = ["dep:libheif-rs"]

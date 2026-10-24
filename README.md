@@ -139,7 +139,24 @@ authors. The list grows as the app is built.
   spawn functions, GIO subprocesses, GTK's URI and file launchers, and
   `std::net`'s sockets are banned through `clippy.toml`. Verify with
   `sdk cargo clippy --workspace --all-targets -- -D warnings`.
-- **No `unsafe` code.** Every crate declares `#![forbid(unsafe_code)]`.
+- **`unsafe` code in one small crate only.** Every crate declares
+  `#![forbid(unsafe_code)]` except `crates/assistant-sandbox`, which
+  holds the system-level code below and the gettext setup; each of its
+  `unsafe` blocks says why it is sound. Verify with
+  `grep -rL 'forbid(unsafe_code)' crates/*/src/lib.rs crates/*/src/main.rs`,
+  which should list only that crate.
+- **The app limits itself as it starts.** Before any other thread
+  starts, it applies Landlock rules so that it can change files only in
+  its own folders and the folder through which the file chooser hands
+  over saved files, can connect over TCP only to port 443, and can
+  never listen for connections; and a seccomp filter that refuses
+  sockets other than local, IPv4, IPv6, and netlink ones, and io_uring.
+  These hold even if other code in the app misbehaves, though not
+  against code that has taken over the whole process. Verify with
+  `cargo test -p assistant-sandbox`, whose tests apply each limit and
+  try to break it. Kernels before Landlock ABI 4 cannot limit TCP; with
+  `ASSISTANT_REQUIRE_LANDLOCK_NET=1` set, the test fails on such a
+  kernel instead of skipping that part.
 - **Network and display only.** The Flatpak manifest grants exactly
   `--share=network`, `--socket=wayland`, `--socket=fallback-x11`,
   `--share=ipc`, and `--device=dri`: no access to your home folder or
