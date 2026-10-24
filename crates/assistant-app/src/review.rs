@@ -484,13 +484,21 @@ impl ReviewPage {
             self.list.append(&row);
         }
         let included = books.iter().filter(|b| b.included).count();
-        self.summary.set_label(&gettext_f(
-            "{count} looked-up books, {included} included in the export.",
-            &[
-                ("count", &books.len().to_string()),
-                ("included", &included.to_string()),
-            ],
-        ));
+        let summary = if books.len() == 1 {
+            gettext_f(
+                "1 looked-up book, {included} included in the export.",
+                &[("included", &included.to_string())],
+            )
+        } else {
+            gettext_f(
+                "{count} looked-up books, {included} included in the export.",
+                &[
+                    ("count", &books.len().to_string()),
+                    ("included", &included.to_string()),
+                ],
+            )
+        };
+        self.summary.set_label(&summary);
         self.export.set_sensitive(included > 0);
     }
 

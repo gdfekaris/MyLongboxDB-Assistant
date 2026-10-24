@@ -8,9 +8,10 @@ use std::time::Instant;
 use adw::prelude::*;
 use assistant_core::cost::{Estimate, anthropic_price, dollars};
 use assistant_core::lines::BookQuery;
-use assistant_core::lookup::{Settings as LookupSettings, estimate_book};
+use assistant_core::lookup::{Draft, Settings as LookupSettings, estimate_book};
 use assistant_core::queue::{self, Event, RunOptions, Summary};
 use assistant_core::results::{self, ReviewBook};
+use assistant_core::write_export;
 use assistant_keys::{ApiKey, ApiKeys, KdfParams, KeyFileError, Passphrase, save, seal};
 use assistant_net::Client;
 use assistant_net::anthropic::Anthropic;
@@ -66,6 +67,10 @@ pub enum AppMsg {
     Review(ReviewMsg),
     Edited(usize, &'static str, String),
     DiscardConfirmed(usize),
+    Export,
+    /// An export was written, or not: the books in it, and how many of
+    /// their values were left out because they were not ticked.
+    Exported(Result<(), String>, Vec<Draft>, usize),
 }
 
 /// Which work page is showing when the app is unlocked.
@@ -119,6 +124,8 @@ impl std::fmt::Debug for AppMsg {
             Self::Review(_) => "Review",
             Self::Edited(..) => "Edited",
             Self::DiscardConfirmed(_) => "DiscardConfirmed",
+            Self::Export => "Export",
+            Self::Exported(..) => "Exported",
         })
     }
 }
@@ -350,6 +357,101 @@ impl App {
                 }
             }
         }
+    }
+
+    /// Tells the owner something in a dialog of its own, for what should
+    /// not slip by as a toast.
+    fn tell(&self, heading: &str, body: &str) {
+        let dialog = adw::AlertDialog::builder()
+            .heading(heading)
+            .body(body)
+            .close_response("close")
+            .build();
+        dialog.add_response("close", &gettext("_Close"));
+        dialog.present(Some(&self.window));
+    }
+
+    /// Asks where to save the included books as a MyLongboxDB export,
+    /// once every one of them would import.
+    fn export(&self) {
+        let year = this_year();
+        let included: Vec<&ReviewBook> = self.results.iter().filter(|b| b.included).collect();
+        let mut refused = Vec::new();
+        let mut books = Vec::new();
+        for b in &included {
+            let Some(book) = b.draft.book(year) else {
+                continue;
+            };
+            if let Some(problem) = book.problems().into_iter().next() {
+                refused.push(format!("{}: {problem}", b.draft.query));
+            }
+            books.push(book);
+        }
+        if books.is_empty() {
+            return;
+        }
+        if !refused.is_empty() {
+            self.tell(
+                &gettext("Some Books Would Not Import"),
+                &gettext_f(
+                    "Correct these books, or leave them out of the export:\n\n{books}",
+                    &[("books", &refused.join("\n"))],
+                ),
+            );
+            return;
+        }
+        let drafts: Vec<Draft> = included.iter().map(|b| b.draft.clone()).collect();
+        let unticked = drafts.iter().map(Draft::unaccepted).sum();
+        let name = glib::DateTime::now_local()
+            .and_then(|d| d.format("%Y-%m-%d"))
+            .map_or_else(
+                |_| "mylongboxdb-assistant.zip".to_owned(),
+                |date| format!("mylongboxdb-assistant-{date}.zip"),
+            );
+        let dialog = gtk::FileDialog::builder()
+            .title(gettext("Export"))
+            .modal(true)
+            .initial_name(name)
+            .build();
+        let sender = self.sender.clone();
+        dialog.save(
+            Some(&self.window),
+            None::<&gio::Cancellable>,
+            move |picked| {
+                let file = match picked {
+                    Ok(file) => file,
+                    Err(e) if e.matches(gtk::DialogError::Dismissed) => return,
+                    Err(e) => {
+                        sender.input(AppMsg::Exported(Err(e.to_string()), Vec::new(), 0));
+                        return;
+                    }
+                };
+                glib::spawn_future_local(async move {
+                    let written = gio::spawn_blocking(move || {
+                        let mut out = std::io::Cursor::new(Vec::new());
+                        write_export(&books, &mut out)
+                            .map(|()| out.into_inner())
+                            .map_err(|e| e.to_string())
+                    })
+                    .await
+                    .unwrap_or_else(|_| Err(gettext("the export could not be made")));
+                    let result = match written {
+                        Ok(bytes) => file
+                            .replace_contents_future(
+                                bytes,
+                                None,
+                                false,
+                                gio::FileCreateFlags::REPLACE_DESTINATION,
+                            )
+                            .await
+                            .map(|_| ())
+                            .map_err(|(_, e)| e.to_string()),
+                        Err(why) => Err(why),
+                    };
+                    sender.input(AppMsg::Exported(result, drafts, unticked));
+                });
+            },
+        );
     }
 
     fn lookup_settings(&self) -> LookupSettings {
@@ -781,6 +883,12 @@ impl SimpleComponent for App {
                 .again
                 .connect_clicked(move |_| sender.input(AppMsg::LookUpMore));
         }
+        {
+            let sender = sender.clone();
+            review
+                .export
+                .connect_clicked(move |_| sender.input(AppMsg::Export));
+        }
         for button in [&run_page.review, &review_button] {
             let sender = sender.clone();
             button.connect_clicked(move |_| sender.input(AppMsg::ShowReview));
@@ -1072,6 +1180,47 @@ impl SimpleComponent for App {
                         self.edit_value(i, key, Some(&text));
                     }
                 }
+            }
+            AppMsg::Export => self.export(),
+            AppMsg::Exported(Err(why), ..) => self.tell(
+                &gettext("Could Not Export"),
+                &gettext_f(
+                    "Nothing was exported, and the books are still here: {why}",
+                    &[("why", &why)],
+                ),
+            ),
+            AppMsg::Exported(Ok(()), drafts, unticked) => {
+                // Exported books are no longer kept; matched by content,
+                // since the list may have changed while the file was saved.
+                self.results
+                    .retain(|b| !(b.included && drafts.contains(&b.draft)));
+                self.save_results();
+                self.review.close_book();
+                if self.results.is_empty() {
+                    self.view = View::Add;
+                }
+                self.show_work();
+                let exported = if drafts.len() == 1 {
+                    gettext("1 book was exported.")
+                } else {
+                    gettext_f(
+                        "{count} books were exported.",
+                        &[("count", &drafts.len().to_string())],
+                    )
+                };
+                let mut body = gettext_f(
+                    "{exported} In MyLongboxDB, choose Import Books and pick the file; \
+                     it shows what will be added before anything is.",
+                    &[("exported", &exported)],
+                );
+                if unticked > 0 {
+                    body.push_str("\n\n");
+                    body.push_str(&gettext_f(
+                        "{unticked} values you did not tick were left out.",
+                        &[("unticked", &unticked.to_string())],
+                    ));
+                }
+                self.tell(&gettext("Export Saved"), &body);
             }
             AppMsg::DiscardConfirmed(i) => {
                 if i < self.results.len() {
