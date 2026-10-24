@@ -1,0 +1,188 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    # A version tag runs every check, then publishes the release.
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_ID: io.github.gdfekaris.MyLongboxDB.Assistant
+
+jobs:
+  policy:
+    name: Format, supply chain, core tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install the pinned toolchain
+        run: rustup toolchain install
+      - name: Install cargo-deny, cargo-audit, and cargo-vet
+        uses: taiki-e/install-action@ab6895351a88b908e96a4697860d4ffea5e57dbe # v2.87.27
+        with:
+          # Pinned, so a new release of a checker changes the checks only
+          # when its version is moved here.
+          tool: cargo-deny@0.20.2,cargo-audit@0.22.2,cargo-vet@0.10.2
+      - run: cargo fmt --all --check
+      - run: cargo deny check
+      - run: cargo audit
+      # Every crate must be audited, by us or by an organisation whose
+      # audits are imported, or be listed as accepted as it was.
+      - run: cargo vet --locked
+
+  sdk:
+    name: Clippy and tests in the GNOME SDK
+    runs-on: ubuntu-24.04
+    # The image is pinned by digest so the build environment only changes
+    # on purpose.
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-51@sha256:78d969b18225ae107ca29497bf09c4a3f791e5f1838a9a912a529d0024fb6210
+      options: --privileged
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Let the sandbox write to the checkout
+        # Root inside the Flatpak sandbox has no capability to write to
+        # files owned by the runner user, so Cargo could not create its
+        # build and cache directories.
+        run: chown -R "$(id -u):$(id -g)" "$GITHUB_WORKSPACE"
+      - name: Install the Rust SDK extension
+        run: flatpak install -y --noninteractive flathub org.freedesktop.Sdk.Extension.rust-stable//26.08
+      - name: Define the SDK shell
+        run: |
+          cat > "$RUNNER_TEMP/sdk.sh" <<'SH'
+          # The first argument shares the network or not; only fetching
+          # the locked crates has it, so builds and tests run without.
+          sdk_with() {
+              net=$1
+              shift
+              FLATPAK_ENABLE_SDK_EXT=rust-stable flatpak run $net \
+                  --filesystem="$GITHUB_WORKSPACE" --cwd="$GITHUB_WORKSPACE" \
+                  --env=PATH=/usr/lib/sdk/rust-stable/bin:/usr/bin:/bin \
+                  --env=CARGO_HOME="$GITHUB_WORKSPACE/.cargo-ci" \
+                  --command=sh org.gnome.Sdk//51 -c "$*"
+          }
+          sdk() {
+              sdk_with "--unshare=network --env=CARGO_NET_OFFLINE=true" "$@"
+          }
+          SH
+          echo "BASH_ENV=$RUNNER_TEMP/sdk.sh" >> "$GITHUB_ENV"
+      - name: Fetch the locked crates
+        shell: bash
+        run: sdk_with --share=network cargo fetch --locked
+      - name: Check the SDK toolchain matches rust-toolchain.toml
+        shell: bash
+        run: |
+          pinned=$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)
+          actual=$(sdk rustc --version | cut -d' ' -f2)
+          echo "pinned $pinned, SDK $actual"
+          test "$pinned" = "$actual"
+      - name: Clippy
+        shell: bash
+        run: sdk cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+      - name: Test
+        shell: bash
+        run: sdk cargo test --locked --workspace
+
+  flatpak:
+    name: Flatpak build and permissions
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-51@sha256:78d969b18225ae107ca29497bf09c4a3f791e5f1838a9a912a529d0024fb6210
+      options: --privileged
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Free disk space for the build
+        shell: bash
+        run: |
+          # The runner's preinstalled toolchains (Python, Go, Node, CodeQL)
+          # are mounted here and unused; the GNOME SDK and the build need
+          # the room.
+          df -h /
+          rm -rf /__t/*
+          df -h /
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@79327416609af08178ad73b352877e51450790b3 # v6.8
+        with:
+          manifest-path: build-aux/io.github.gdfekaris.MyLongboxDB.Assistant.yml
+          bundle: mylongboxdb-assistant.flatpak
+          artifact-name: mylongboxdb-assistant-flatpak
+          cache-key: flatpak-builder-${{ hashFiles('build-aux/**', 'Cargo.lock') }}
+      - name: Permissions are exactly network, Wayland, X11 fallback, IPC, and DRI
+        shell: bash
+        run: |
+          # Sort keys and the values within each key, so only the set of
+          # permissions matters, not the order flatpak prints them in.
+          normalize() {
+              sed '/^$/d' | while IFS= read -r line; do
+                  case $line in
+                      *=*) printf '%s=%s\n' "${line%%=*}" \
+                          "$(printf '%s' "${line#*=}" | tr ';' '\n' | sed '/^$/d' | sort | paste -sd';')" ;;
+                      *) printf '%s\n' "$line" ;;
+                  esac
+              done | sort
+          }
+          flatpak install -y --noninteractive --user --bundle mylongboxdb-assistant.flatpak
+          flatpak info --user --show-permissions "$APP_ID" | normalize > actual
+          printf '%s\n' '[Context]' 'shared=network;ipc;' 'sockets=wayland;fallback-x11;' 'devices=dri;' | normalize > expected
+          diff -u expected actual
+
+  release:
+    name: Publish the release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [policy, sdk, flatpak]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      # Signing the build provenance: a short-lived Sigstore certificate
+      # for this workflow run, and recording the attestation with GitHub.
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: mylongboxdb-assistant-flatpak
+      - name: Name the bundle for the release
+        id: bundle
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          bundle="MyLongboxDB-Assistant-${TAG#v}.flatpak"
+          mv mylongboxdb-assistant.flatpak "$bundle"
+          sha256sum "$bundle" > "$bundle.sha256"
+          echo "path=$bundle" >> "$GITHUB_OUTPUT"
+      # A signed statement that this run built the bundle from the tagged
+      # commit, which anyone can check with `gh attestation verify`.
+      - uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: ${{ steps.bundle.outputs.path }}
+      - name: Publish the bundle and its checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          BUNDLE: ${{ steps.bundle.outputs.path }}
+        run: |
+          cat > notes.md <<NOTES
+          Install with:
+
+              flatpak install --user $BUNDLE
+
+          Check the download first with \`sha256sum -c $BUNDLE.sha256\`, and
+          that this repository's CI built it from the tagged source with
+          \`gh attestation verify $BUNDLE --repo $GITHUB_REPOSITORY\`.
+          NOTES
+          gh release create "$TAG" "$BUNDLE" "$BUNDLE.sha256" \
+              --repo "$GITHUB_REPOSITORY" --title "MyLongboxDB Assistant ${TAG#v}" --notes-file notes.md
