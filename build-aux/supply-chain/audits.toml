@@ -1,0 +1,266 @@
+
+# cargo-vet audits file
+
+[[audits.bytemuck]]
+who = "gdfekaris <gdfekaris@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "1.22.0 -> 1.25.2"
+notes = "New marker impls (arrays of NoUninit types, MaybeUninit arrays, fn pointers in Option) checked as sound; no new unsafe blocks."
+
+[[audits.cfg-if]]
+who = "gdfekaris <gdfekaris@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.4 -> 1.0.5"
+notes = "Version bump, manifest reordering, doc and message text only; no code change."
+
+[[audits.chacha20]]
+who = "gdfekaris <gdfekaris@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.10.0 -> 0.10.2"
+notes = "SSE2 backend no longer uses an SSE4.1 intrinsic (unaligned store of row 3 instead, in bounds); NEON batching in bounds; no new capabilities."
+
+[[audits.fastrand]]
+who = "gdfekaris <gdfekaris@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "2.3.0 -> 2.5.0"
+notes = "New float sampling in safe code; getrandom bump applies only to wasm32 with the js feature."
+
+[[audits.futures]]
+who = "gdfekaris <gdfekaris@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.31 -> 0.3.34"
+notes = "Facade crate: dependency bumps, a forwarding feature, test changes."
+
+[[audits.futures-channel]]
+who = "gdfekaris <gdfekaris@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.31 -> 0.3.34"
+notes = "Adds recv()/try_recv() safe wrappers over existing internals; no new unsafe."
+
+[[audits.futures-executor]]
+who = "gdfekaris <gdfekaris@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.31 -> 0.3.34"
+notes = "Drops num_cpus for std available_parallelism, uses std::pin::pin! and a const thread_local; no unsafe or capability changes."
+
+[[audits.futures-io]]
+who = "gdfekaris <gdfekaris@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.31 -> 0.3.34"
+notes = "Version bump, manifest reordering, doc and message text only; no code change."
+
+[[audits.futures-macro]]
+who = "gdfekaris <gdfekaris@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.31 -> 0.3.34"
+notes = "Version bump, manifest reordering, doc and message text only; no code change."
+
+[[audits.futures-sink]]
+who = "gdfekaris <gdfekaris@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.3.31 -> 0.3.34"
+notes = "Version bump, manifest reordering, doc and message text only; no code change."
+
+[[audits.pin-project-lite]]
+who = "gdfekaris <gdfekaris@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.2.16 -> 0.2.17"
+notes = "Metadata, lint config, docs, and UI-test expectations only; macro expansion unchanged."
+
+[[audits.rand_core]]
+who = "gdfekaris <gdfekaris@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.10.0 -> 0.10.1"
+notes = "Version bump, manifest reordering, doc and message text only; no code change."
+
+[[audits.rand_xorshift]]
+who = "gdfekaris <gdfekaris@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.0 -> 0.5.0"
+notes = "Port to the rand_core 0.10 TryRng API; algorithm unchanged; crate stays forbid(unsafe_code)."
+
+[[audits.slab]]
+who = "gdfekaris <gdfekaris@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.4.8 -> 0.4.12"
+notes = "Removes build.rs; new get_disjoint_mut checks keys are distinct and in bounds before any deref and fills every slot before assume_init."
+
+[[audits.tracing-attributes]]
+who = "gdfekaris <gdfekaris@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.1.30 -> 0.1.31"
+notes = "Parses brace-wrapped const field names and emits them verbatim; generated code has no unsafe."
+
+[[audits.version-compare]]
+who = "gdfekaris <gdfekaris@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "0.1.1 -> 0.2.1"
+notes = "Safe-code refactor and an optional GNU ordering; no unsafe, no I/O."
+
+[[trusted.autocfg]]
+criteria = "safe-to-deploy"
+user-id = 539 # Josh Stone (cuviper)
+start = "2019-05-22"
+end = "2027-10-19"
+
+[[trusted.csv]]
+criteria = "safe-to-deploy"
+user-id = 189 # Andrew Gallant (BurntSushi)
+start = "2019-04-05"
+end = "2027-10-19"
+
+[[trusted.csv-core]]
+criteria = "safe-to-deploy"
+user-id = 189 # Andrew Gallant (BurntSushi)
+start = "2019-06-26"
+end = "2027-10-19"
+
+[[trusted.enumn]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-08-18"
+end = "2027-10-19"
+
+[[trusted.itoa]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-05-02"
+end = "2027-10-19"
+
+[[trusted.memchr]]
+criteria = "safe-to-deploy"
+user-id = 189 # Andrew Gallant (BurntSushi)
+start = "2019-07-07"
+end = "2027-10-19"
+
+[[trusted.proc-macro2]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-04-23"
+end = "2027-10-19"
+
+[[trusted.regex-syntax]]
+criteria = "safe-to-deploy"
+user-id = 189 # Andrew Gallant (BurntSushi)
+start = "2019-03-30"
+end = "2027-10-19"
+
+[[trusted.rustversion]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-07-08"
+end = "2027-10-19"
+
+[[trusted.ryu]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-05-02"
+end = "2027-10-19"
+
+[[trusted.same-file]]
+criteria = "safe-to-deploy"
+user-id = 189 # Andrew Gallant (BurntSushi)
+start = "2019-07-16"
+end = "2027-10-19"
+
+[[trusted.scopeguard]]
+criteria = "safe-to-deploy"
+user-id = 2915 # Amanieu d'Antras (Amanieu)
+start = "2020-02-16"
+end = "2027-10-19"
+
+[[trusted.serde]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-03-01"
+end = "2027-10-19"
+
+[[trusted.serde_core]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2025-09-13"
+end = "2027-10-19"
+
+[[trusted.serde_derive]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-03-01"
+end = "2027-10-19"
+
+[[trusted.serde_json]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-02-28"
+end = "2027-10-19"
+
+[[trusted.serde_spanned]]
+criteria = "safe-to-deploy"
+user-id = 6743 # Ed Page (epage)
+start = "2023-01-20"
+end = "2027-10-19"
+
+[[trusted.syn]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-03-01"
+end = "2027-10-19"
+
+[[trusted.thiserror]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-10-09"
+end = "2027-10-19"
+
+[[trusted.thiserror-impl]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2019-10-09"
+end = "2027-10-19"
+
+[[trusted.toml_datetime]]
+criteria = "safe-to-deploy"
+user-id = 6743 # Ed Page (epage)
+start = "2022-10-21"
+end = "2027-10-19"
+
+[[trusted.toml_parser]]
+criteria = "safe-to-deploy"
+user-id = 6743 # Ed Page (epage)
+start = "2025-07-08"
+end = "2027-10-19"
+
+[[trusted.toml_writer]]
+criteria = "safe-to-deploy"
+user-id = 6743 # Ed Page (epage)
+start = "2025-07-08"
+end = "2027-10-19"
+
+[[trusted.unicode-ident]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2021-10-02"
+end = "2027-10-19"
+
+[[trusted.walkdir]]
+criteria = "safe-to-deploy"
+user-id = 189 # Andrew Gallant (BurntSushi)
+start = "2019-06-09"
+end = "2027-10-19"
+
+[[trusted.winapi-util]]
+criteria = "safe-to-deploy"
+user-id = 189 # Andrew Gallant (BurntSushi)
+start = "2020-01-11"
+end = "2027-10-19"
+
+[[trusted.winnow]]
+criteria = "safe-to-deploy"
+user-id = 6743 # Ed Page (epage)
+start = "2023-02-22"
+end = "2027-10-19"
+
+[[trusted.zmij]]
+criteria = "safe-to-deploy"
+user-id = 3618 # David Tolnay (dtolnay)
+start = "2025-12-18"
+end = "2027-10-19"

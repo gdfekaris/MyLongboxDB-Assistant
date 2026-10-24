@@ -21,3 +21,7 @@ disallowed_types = "deny"
 # responses and picked photos reach code that counts bytes and pixels.
 [profile.release]
 overflow-checks = true
+
+# cargo-vet's audit records live with the other build files.
+[workspace.metadata.vet]
+store = { path = "./build-aux/supply-chain" }

@@ -1,0 +1,247 @@
+
+# cargo-vet config file
+
+[cargo-vet]
+version = "0.10"
+
+[imports.bytecode-alliance]
+url = "https://raw.githubusercontent.com/bytecodealliance/wasmtime/main/supply-chain/audits.toml"
+
+[imports.embark-studios]
+url = "https://raw.githubusercontent.com/EmbarkStudios/rust-ecosystem/main/audits.toml"
+
+[imports.google]
+url = "https://raw.githubusercontent.com/google/supply-chain/main/audits.toml"
+
+[imports.isrg]
+url = "https://raw.githubusercontent.com/divviup/libprio-rs/main/supply-chain/audits.toml"
+
+[imports.mozilla]
+url = "https://raw.githubusercontent.com/mozilla/supply-chain/main/audits.toml"
+
+[imports.zcash]
+url = "https://raw.githubusercontent.com/zcash/rust-ecosystem/main/supply-chain/audits.toml"
+
+[[exemptions.bitflags]]
+version = "2.13.2"
+criteria = "safe-to-deploy"
+
+[[exemptions.cairo-rs]]
+version = "0.22.9"
+criteria = "safe-to-deploy"
+
+[[exemptions.cairo-sys-rs]]
+version = "0.22.9"
+criteria = "safe-to-deploy"
+
+[[exemptions.cfg-expr]]
+version = "0.20.10"
+criteria = "safe-to-deploy"
+
+[[exemptions.field-offset]]
+version = "0.3.6"
+criteria = "safe-to-deploy"
+
+[[exemptions.flume]]
+version = "0.12.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.fragile]]
+version = "2.1.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.futures-task]]
+version = "0.3.34"
+criteria = "safe-to-deploy"
+
+[[exemptions.futures-util]]
+version = "0.3.34"
+criteria = "safe-to-deploy"
+
+[[exemptions.gdk-pixbuf]]
+version = "0.22.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.gdk-pixbuf-sys]]
+version = "0.22.9"
+criteria = "safe-to-deploy"
+
+[[exemptions.gdk4]]
+version = "0.11.5"
+criteria = "safe-to-deploy"
+
+[[exemptions.gdk4-sys]]
+version = "0.11.5"
+criteria = "safe-to-deploy"
+
+[[exemptions.getrandom]]
+version = "0.4.3"
+criteria = "safe-to-deploy"
+
+[[exemptions.gio]]
+version = "0.22.10"
+criteria = "safe-to-deploy"
+
+[[exemptions.gio-sys]]
+version = "0.22.9"
+criteria = "safe-to-deploy"
+
+[[exemptions.glib]]
+version = "0.22.10"
+criteria = "safe-to-deploy"
+
+[[exemptions.glib-macros]]
+version = "0.22.9"
+criteria = "safe-to-deploy"
+
+[[exemptions.glib-sys]]
+version = "0.22.9"
+criteria = "safe-to-deploy"
+
+[[exemptions.gobject-sys]]
+version = "0.22.9"
+criteria = "safe-to-deploy"
+
+[[exemptions.graphene-rs]]
+version = "0.22.8"
+criteria = "safe-to-deploy"
+
+[[exemptions.graphene-sys]]
+version = "0.22.9"
+criteria = "safe-to-deploy"
+
+[[exemptions.gsk4]]
+version = "0.11.5"
+criteria = "safe-to-deploy"
+
+[[exemptions.gsk4-sys]]
+version = "0.11.5"
+criteria = "safe-to-deploy"
+
+[[exemptions.gtk4]]
+version = "0.11.5"
+criteria = "safe-to-deploy"
+
+[[exemptions.gtk4-macros]]
+version = "0.11.5"
+criteria = "safe-to-deploy"
+
+[[exemptions.gtk4-sys]]
+version = "0.11.5"
+criteria = "safe-to-deploy"
+
+[[exemptions.hashbrown]]
+version = "0.17.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.indexmap]]
+version = "2.14.2"
+criteria = "safe-to-deploy"
+
+[[exemptions.js-sys]]
+version = "0.3.106"
+criteria = "safe-to-deploy"
+
+[[exemptions.libadwaita]]
+version = "0.9.2"
+criteria = "safe-to-deploy"
+
+[[exemptions.libadwaita-sys]]
+version = "0.9.2"
+criteria = "safe-to-deploy"
+
+[[exemptions.libc]]
+version = "0.2.190"
+criteria = "safe-to-deploy"
+
+[[exemptions.lock_api]]
+version = "0.4.14"
+criteria = "safe-to-deploy"
+
+[[exemptions.memoffset]]
+version = "0.9.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.once_cell]]
+version = "1.21.4"
+criteria = "safe-to-deploy"
+
+[[exemptions.pango]]
+version = "0.22.9"
+criteria = "safe-to-deploy"
+
+[[exemptions.pango-sys]]
+version = "0.22.9"
+criteria = "safe-to-deploy"
+
+[[exemptions.proc-macro-crate]]
+version = "3.5.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.r-efi]]
+version = "6.0.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.relm4]]
+version = "0.11.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.relm4-macros]]
+version = "0.11.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.smallvec]]
+version = "1.16.3"
+criteria = "safe-to-deploy"
+
+[[exemptions.spin]]
+version = "0.9.9"
+criteria = "safe-to-deploy"
+
+[[exemptions.system-deps]]
+version = "7.0.8"
+criteria = "safe-to-deploy"
+
+[[exemptions.system-deps]]
+version = "9.0.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.target-lexicon]]
+version = "0.13.5"
+criteria = "safe-to-deploy"
+
+[[exemptions.tokio]]
+version = "1.53.2"
+criteria = "safe-to-deploy"
+
+[[exemptions.toml]]
+version = "1.1.8+spec-1.1.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.toml_edit]]
+version = "0.25.17+spec-1.1.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.tracing]]
+version = "0.1.44"
+criteria = "safe-to-deploy"
+
+[[exemptions.wasm-bindgen]]
+version = "0.2.129"
+criteria = "safe-to-deploy"
+
+[[exemptions.wasm-bindgen-macro]]
+version = "0.2.129"
+criteria = "safe-to-deploy"
+
+[[exemptions.wasm-bindgen-macro-support]]
+version = "0.2.129"
+criteria = "safe-to-deploy"
+
+[[exemptions.wasm-bindgen-shared]]
+version = "0.2.129"
+criteria = "safe-to-deploy"
+
+[[exemptions.windows-sys]]
+version = "0.61.2"
+criteria = "safe-to-deploy"
