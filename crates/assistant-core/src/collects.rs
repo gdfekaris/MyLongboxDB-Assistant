@@ -89,7 +89,7 @@ pub fn format_collects(entries: &[CollectsEntry]) -> String {
 /// Splits a series group on commas. Until the series head has its first
 /// digit, pieces are rejoined, so a name like `Batman, Inc.` stays whole;
 /// after that, every piece is an item.
-fn split_items(group: &str) -> Vec<String> {
+pub(crate) fn split_items(group: &str) -> Vec<String> {
     let mut items: Vec<String> = Vec::new();
     let mut head = String::new();
     for piece in group.split(',') {
@@ -143,7 +143,7 @@ fn parse_head(item: &str) -> Result<(SeriesRef, String), String> {
 }
 
 /// The first `(YYYY)` in `text`: its byte offset and the year.
-fn find_year(text: &str) -> Option<(usize, u16)> {
+pub(crate) fn find_year(text: &str) -> Option<(usize, u16)> {
     let bytes = text.as_bytes();
     (0..bytes.len().saturating_sub(5)).find_map(|i| {
         let window = &bytes[i..i + 6];
@@ -161,7 +161,7 @@ fn find_year(text: &str) -> Option<(usize, u16)> {
 
 /// Where the trailing number or range begins in a head without a year:
 /// the last word, or the last three when they read `a – b`.
-fn number_start(item: &str) -> Option<usize> {
+pub(crate) fn number_start(item: &str) -> Option<usize> {
     let words: Vec<(usize, &str)> = item
         .split_whitespace()
         .map(|w| (w.as_ptr() as usize - item.as_ptr() as usize, w))
@@ -182,7 +182,7 @@ fn number_start(item: &str) -> Option<usize> {
 
 /// Reads one item: a number such as `121` or `Annual 1`, or a range such
 /// as `1–10` or `Annual 1–3`.
-fn parse_numbers(item: &str) -> Result<Vec<IssueNumber>, String> {
+pub(crate) fn parse_numbers(item: &str) -> Result<Vec<IssueNumber>, String> {
     let item = item.replace('#', " ");
     let item = item.split_whitespace().collect::<Vec<_>>().join(" ");
     if let Some((left, right)) = split_range(&item) {

@@ -8,6 +8,7 @@ pub mod collects;
 pub mod date;
 pub mod export;
 pub mod issue_number;
+pub mod lines;
 pub mod model;
 pub mod money;
 
@@ -16,6 +17,7 @@ pub use collects::{CollectsEntry, SeriesRef, format_collects, parse_collects};
 pub use date::{CoverDate, Date, DateError, PartialDate};
 pub use export::{COLUMNS, ExportError, write_export};
 pub use issue_number::{IssueNumber, IssueNumberError};
+pub use lines::{BookQuery, LineProblem, MAX_BOOKS_PER_LINE, parse_lines};
 pub use model::{
     Appearance, ArcPart, Binding, Book, Category, Confidence, Credit, Distribution, EditionInfo,
     Gathered, IssueInfo, Jpeg, MagazineFormat, Role, SeriesInfo,
