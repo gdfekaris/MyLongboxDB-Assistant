@@ -1,0 +1,37 @@
+id: io.github.gdfekaris.MyLongboxDB.Assistant
+runtime: org.gnome.Platform
+runtime-version: '51'
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+command: mylongboxdb-assistant
+# The complete permission set: the network, for the two AI providers'
+# APIs, and the display. No home or host filesystem access; files are
+# reached only through the file chooser portal.
+finish-args:
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --share=ipc
+  - --device=dri
+build-options:
+  append-path: /usr/lib/sdk/rust-stable/bin
+modules:
+  - name: mylongboxdb-assistant
+    buildsystem: simple
+    build-options:
+      env:
+        CARGO_HOME: /run/build/mylongboxdb-assistant/cargo
+        CARGO_NET_OFFLINE: 'true'
+    build-commands:
+      - cargo --offline build --release --locked -p assistant-app
+      - install -Dm755 target/release/mylongboxdb-assistant -t /app/bin/
+    sources:
+      - type: dir
+        path: ..
+        skip:
+          - target
+          - .flatpak-builder
+          - _build
+          - repo
+      - cargo-sources.json
