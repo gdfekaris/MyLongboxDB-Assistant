@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=MyLongboxDB Assistant
+Comment=Fill in comic book details for MyLongboxDB
+Exec=mylongboxdb-assistant
+Icon=io.github.gdfekaris.MyLongboxDB.Assistant
+Terminal=false
+Type=Application
+Categories=Office;Database;
+Keywords=comics;comic books;magazines;collection;catalog;AI;
+StartupNotify=true

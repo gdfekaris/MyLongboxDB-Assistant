@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.gdfekaris.MyLongboxDB.Assistant</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+
+  <name>MyLongboxDB Assistant</name>
+  <summary>Fill in comic book details for MyLongboxDB</summary>
+  <developer id="io.github.gdfekaris">
+    <name>gdfekaris</name>
+  </developer>
+
+  <description>
+    <p>
+      MyLongboxDB Assistant looks up the details of comic books, magazines,
+      and collected editions from a cover photo or a series and issue
+      number, using an AI model from Anthropic or OpenRouter with your own
+      API key. You review every field it found before anything is saved,
+      and the results are written as a MyLongboxDB full export for you to
+      import.
+    </p>
+    <p>
+      The Assistant never opens your MyLongboxDB collection, connects only
+      to the provider you choose, and keeps your API key encrypted with a
+      passphrase, or does not store it at all.
+    </p>
+  </description>
+
+  <launchable type="desktop-id">io.github.gdfekaris.MyLongboxDB.Assistant.desktop</launchable>
+
+  <url type="homepage">https://github.com/gdfekaris/MyLongboxDB-Assistant</url>
+  <url type="bugtracker">https://github.com/gdfekaris/MyLongboxDB-Assistant/issues</url>
+  <url type="vcs-browser">https://github.com/gdfekaris/MyLongboxDB-Assistant</url>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#f6d32d</color>
+    <color type="primary" scheme_preference="dark">#a51d2d</color>
+  </branding>
+
+  <content_rating type="oars-1.1"/>
+
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+</component>

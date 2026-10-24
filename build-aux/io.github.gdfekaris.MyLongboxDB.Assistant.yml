@@ -26,6 +26,11 @@ modules:
     build-commands:
       - cargo --offline build --release --locked -p assistant-app
       - install -Dm755 target/release/mylongboxdb-assistant -t /app/bin/
+      - install -Dm644 data/io.github.gdfekaris.MyLongboxDB.Assistant.desktop -t /app/share/applications/
+      - install -Dm644 data/io.github.gdfekaris.MyLongboxDB.Assistant.metainfo.xml -t /app/share/metainfo/
+      - for size in 16 32 48 64 128 256 512; do install -Dm644
+        data/icons/hicolor/${size}x${size}/apps/io.github.gdfekaris.MyLongboxDB.Assistant.png
+        -t /app/share/icons/hicolor/${size}x${size}/apps/ || exit 1; done
     sources:
       - type: dir
         path: ..
