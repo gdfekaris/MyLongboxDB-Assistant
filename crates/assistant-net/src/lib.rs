@@ -6,6 +6,7 @@
 pub mod anthropic;
 mod base64;
 pub mod http;
+pub mod lookup;
 pub mod openrouter;
 pub mod provider;
 pub mod retry;
