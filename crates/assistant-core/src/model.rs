@@ -303,31 +303,6 @@ pub enum Confidence {
     High,
 }
 
-/// A value the model gathered, with where it came from, for the owner to
-/// accept, edit, or clear on the review page. A blank value is a right
-/// answer when the sources are unsure.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Gathered<T> {
-    pub value: Option<T>,
-    /// The page the value came from, shown as text and never opened.
-    pub source_url: String,
-    pub confidence: Confidence,
-    /// Why the value is doubtful or blank, when it is.
-    pub note: String,
-}
-
-impl<T> Gathered<T> {
-    /// No value, with the reason.
-    pub fn blank(note: impl Into<String>) -> Self {
-        Self {
-            value: None,
-            source_url: String::new(),
-            confidence: Confidence::Low,
-            note: note.into(),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
