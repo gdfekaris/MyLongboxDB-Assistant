@@ -11,6 +11,9 @@ publish.workspace = true
 name = "mylongboxdb-assistant"
 path = "src/main.rs"
 
+[lints]
+workspace = true
+
 [dependencies]
 adw = { package = "libadwaita", version = "0.9" }
 gtk = { package = "gtk4", version = "0.11", features = ["gnome_49"] }

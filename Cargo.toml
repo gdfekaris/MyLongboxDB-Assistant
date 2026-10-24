@@ -10,6 +10,12 @@ license = "MIT"
 repository = "https://github.com/gdfekaris/MyLongboxDB-Assistant"
 publish = false
 
+[workspace.lints.clippy]
+# Running other programs, raw sockets, and ureq's default settings are
+# banned; the paths live in clippy.toml.
+disallowed_methods = "deny"
+disallowed_types = "deny"
+
 # Arithmetic that overflows stops the app rather than wrapping into a
 # wrong size or index, as it does in development builds. Provider
 # responses and picked photos reach code that counts bytes and pixels.
