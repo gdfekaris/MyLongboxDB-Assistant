@@ -1,6 +1,9 @@
 //! Looking a book up, in steps the app controls rather than in one
 //! open-ended prompt:
 //!
+//! 0. Read, for photos: the model reports what the covers print, and
+//!    that becomes the book to look up and sources the later steps can
+//!    cite.
 //! 1. Research: with web search, find which issue it is and what reliable
 //!    pages say about it. The provider reports which pages were cited.
 //! 2. Structure: without tools, turn the notes into the fields under a
@@ -17,6 +20,7 @@
 mod draft;
 mod fields;
 mod prompts;
+mod read;
 mod schema;
 #[cfg(test)]
 mod tests;
@@ -26,10 +30,11 @@ use std::sync::atomic::{AtomicBool, Ordering};
 pub use draft::{Candidate, Detail, Draft, Entry, Identity, Source, Value};
 pub use fields::{FIELDS, Field, Kind, check, spec};
 pub use prompts::PROMPT_VERSION;
+pub use read::{COVER_PHOTO, Reading, Seen};
 
-use crate::cost::{Estimate, Planned, Price, Usage};
+use crate::cost::{Estimate, Planned, Price, Usage, image_tokens};
 use crate::lines::BookQuery;
-use crate::model::{Category, Confidence, Role};
+use crate::model::{Category, Confidence, Jpeg, Role};
 use crate::money::Picodollars;
 use draft::fits_category;
 pub(crate) use fields::clean;
@@ -66,6 +71,7 @@ impl Settings {
 }
 
 /// The most a step may write. Thinking counts toward it.
+const READ_TOKENS: u32 = 4_000;
 const RESEARCH_TOKENS: u32 = 16_000;
 const STRUCTURE_TOKENS: u32 = 16_000;
 const CHECK_TOKENS: u32 = 8_000;
@@ -101,13 +107,32 @@ pub fn planned(settings: &Settings) -> [Planned; 3] {
     ]
 }
 
-/// What one book's lookup should and at most can cost.
+/// What the read step is expected to use for photos of these sizes, in
+/// pixels.
+pub fn planned_read(photos: &[(u32, u32)]) -> Planned {
+    let images: u64 = photos.iter().map(|(w, h)| image_tokens(*w, *h)).sum();
+    Planned {
+        input_tokens: 1_500 + images,
+        likely_output_tokens: 1_500,
+        most_output_tokens: u64::from(READ_TOKENS),
+        images: photos.len() as u64,
+        ..Planned::default()
+    }
+}
+
+/// What one book's lookup from a typed line should and at most can cost.
 pub fn estimate_book(price: &Price, settings: &Settings) -> Estimate {
     planned(settings)
         .iter()
         .fold(Estimate::default(), |sum, step| {
             sum.plus(step.estimate(price))
         })
+}
+
+/// What one book's lookup from photos of these sizes should and at most
+/// can cost: the read step, then the same steps as a typed line.
+pub fn estimate_photo_book(price: &Price, settings: &Settings, photos: &[(u32, u32)]) -> Estimate {
+    estimate_book(price, settings).plus(planned_read(photos).estimate(price))
 }
 
 /// The query for the series the owner picked from an unsettled lookup's
@@ -137,6 +162,8 @@ pub struct ResearchRequest {
 pub struct SchemaRequest {
     pub name: &'static str,
     pub system: String,
+    /// Photos, sent before the text.
+    pub images: Vec<Jpeg>,
     pub user: String,
     pub schema: serde_json::Value,
     pub effort: Effort,
@@ -215,6 +242,8 @@ pub enum LookupError {
     Failed(Failure),
     /// The model's structured answer could not be read.
     Unreadable(String),
+    /// The covers did not show a book to look up, and why.
+    NoBookOnCover(String),
 }
 
 impl std::fmt::Display for LookupError {
@@ -234,6 +263,7 @@ impl std::fmt::Display for LookupError {
             }
             Self::Failed(Failure::Cancelled) => f.write_str("cancelled"),
             Self::Unreadable(why) => write!(f, "the model's answer could not be read: {why}"),
+            Self::NoBookOnCover(why) => write!(f, "nothing was looked up: {why}"),
         }
     }
 }
@@ -315,6 +345,7 @@ fn read_structured(
     research: &Research,
     query: &BookQuery,
     settings: &Settings,
+    from_text: bool,
 ) -> Result<Draft, LookupError> {
     let unreadable =
         |e: &dyn std::fmt::Display| LookupError::Unreadable(clean(&e.to_string(), 300));
@@ -371,7 +402,7 @@ fn read_structured(
         }
     }
 
-    for field in FIELDS.iter().filter(|f| f.from_text) {
+    for field in FIELDS.iter().filter(|f| f.from_text || !from_text) {
         let mut value = Value {
             key: field.key,
             text: String::new(),
@@ -542,8 +573,8 @@ fn effort_note(failure: &Failure) -> String {
     }
 }
 
-/// Looks one book up. What every request spent is added to `spent`, even
-/// when the lookup fails.
+/// Looks one book up from a typed line. What every request spent is
+/// added to `spent`, even when the lookup fails.
 pub fn look_up(
     provider: &dyn Provider,
     query: &BookQuery,
@@ -551,15 +582,125 @@ pub fn look_up(
     cancel: &AtomicBool,
     spent: &mut Spent,
 ) -> Result<Draft, LookupError> {
+    look_up_from(provider, query, None, settings, cancel, spent)
+}
+
+/// The owner's photos of one book: the front cover, and the back if they
+/// took it. Each is a JPEG re-encoded from pixels alone.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Covers {
+    /// The book's place in the run, as a typed book's line.
+    pub line: usize,
+    pub front: Jpeg,
+    pub back: Option<Jpeg>,
+}
+
+/// Looks one book up from its cover photos: reads them, then looks up
+/// the book they show, as for a typed line. What every request spent is
+/// added to `spent`, even when the lookup fails.
+pub fn look_up_covers(
+    provider: &dyn Provider,
+    covers: &Covers,
+    settings: &Settings,
+    cancel: &AtomicBool,
+    spent: &mut Spent,
+) -> Result<Draft, LookupError> {
+    let json = reply(
+        provider.answer(
+            &SchemaRequest {
+                name: "cover",
+                system: read::prompt(),
+                images: std::iter::once(covers.front.clone())
+                    .chain(covers.back.clone())
+                    .collect(),
+                user: if covers.back.is_some() {
+                    "The first photo is the front cover, the second the back.".into()
+                } else {
+                    "The photo is the front cover.".into()
+                },
+                schema: read::schema(),
+                effort: settings.effort,
+                max_tokens: READ_TOKENS,
+            },
+            cancel,
+        ),
+        spent,
+    )?;
+    let reading = Reading::parse(&json).map_err(|why| LookupError::Unreadable(clean(&why, 300)))?;
+    let query = reading
+        .query(covers.line)
+        .map_err(LookupError::NoBookOnCover)?;
+    if cancel.load(Ordering::Relaxed) {
+        return Err(LookupError::Failed(Failure::Cancelled));
+    }
+    let mut draft = look_up_from(provider, &query, Some(&reading), settings, cancel, spent)?;
+    compare_barcodes(&mut draft, &reading);
+    Ok(draft)
+}
+
+/// Holds the barcode to the one read from the cover, whose check digit
+/// shows it was read right: a different one found online is doubted,
+/// and a missing one is taken from the cover.
+fn compare_barcodes(draft: &mut Draft, reading: &Reading) {
+    if draft.identity != Identity::Identified {
+        return;
+    }
+    let read = reading.barcode();
+    let cover_source = draft.sources.iter().position(|s| {
+        s.url == COVER_PHOTO
+            && reading
+                .get("barcode")
+                .is_some_and(|b| b.text == s.cited_text)
+    });
+    let Some(value) = draft.values.iter_mut().find(|v| v.key == "barcode") else {
+        return;
+    };
+    match read {
+        Some(read) if value.text.is_empty() => {
+            value.text = read.as_str().to_owned();
+            value.source = cover_source;
+            value.confidence = Confidence::High;
+            value.accepted = true;
+            value.note.clear();
+        }
+        Some(read) if value.text != read.as_str() => {
+            value.accepted = false;
+            value.note = format!("differs from the barcode on your cover, {}", read.as_str());
+        }
+        Some(_) => {}
+        None if reading.get("barcode").is_some() && value.text.is_empty() => {
+            value.note = "the digits read from your cover fail the check digit".into();
+        }
+        None => {}
+    }
+}
+
+/// The steps after reading: research, structure, check. `reading` is
+/// what the covers showed, for a photo lookup.
+fn look_up_from(
+    provider: &dyn Provider,
+    query: &BookQuery,
+    reading: Option<&Reading>,
+    settings: &Settings,
+    cancel: &AtomicBool,
+    spent: &mut Spent,
+) -> Result<Draft, LookupError> {
+    let from_text = reading.is_none();
+    let (edition, cover) = match reading {
+        None => (prompts::TEXT_EDITION, String::new()),
+        Some(r) => (prompts::PHOTO_EDITION, format!("\n{}", r.describe())),
+    };
     let research = reply(
         provider.research(
             &ResearchRequest {
                 system: format!(
-                    "{}{}and its credits, characters, teams, and story arcs, each with the page that says so.\n",
+                    "{}{}{}{}and its credits, characters, teams, and story arcs, each with the page that says so.\n",
                     prompts::RESEARCH,
-                    prompts::field_list(true)
+                    edition,
+                    prompts::REPORT,
+                    prompts::field_list(from_text)
                 ),
-                user: describe(query),
+                user: format!("{}{cover}", describe(query)),
                 max_searches: settings.max_searches,
                 effort: settings.effort,
                 max_tokens: RESEARCH_TOKENS,
@@ -584,13 +725,23 @@ pub fn look_up(
     if cancel.load(Ordering::Relaxed) {
         return Err(LookupError::Failed(Failure::Cancelled));
     }
+    // The covers' items come first, so they keep their numbers whatever
+    // the research found.
+    let research = match reading {
+        None => research,
+        Some(r) => Research {
+            sources: r.sources().into_iter().chain(research.sources).collect(),
+            text: research.text,
+        },
+    };
     let json = reply(
         provider.answer(
             &SchemaRequest {
                 name: "book",
-                system: format!("{}{}", prompts::STRUCTURE, prompts::field_list(true)),
+                system: format!("{}{}", prompts::STRUCTURE, prompts::field_list(from_text)),
+                images: Vec::new(),
                 user: format!("{}\n{}", describe(query), notes(&research)),
-                schema: schema::structure(true),
+                schema: schema::structure(from_text),
                 effort: settings.effort,
                 max_tokens: STRUCTURE_TOKENS,
             },
@@ -598,7 +749,7 @@ pub fn look_up(
         ),
         spent,
     )?;
-    let mut draft = read_structured(&json, &research, query, settings)?;
+    let mut draft = read_structured(&json, &research, query, settings, from_text)?;
     if draft.identity != Identity::Identified {
         return Ok(draft);
     }
@@ -609,6 +760,7 @@ pub fn look_up(
         &SchemaRequest {
             name: "check",
             system: prompts::CHECK.to_owned(),
+            images: Vec::new(),
             user: format!(
                 "{}\n{}\n{}",
                 describe(query),

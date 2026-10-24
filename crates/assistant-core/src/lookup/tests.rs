@@ -420,3 +420,249 @@ fn a_chosen_candidate_replaces_the_series_but_keeps_the_number() {
     assert_eq!(chosen.to_string(), "X-Men (1991) Vol. 2 #1");
     assert_eq!(chosen.line, q.line);
 }
+
+// Photo lookups: the read step first, then the same steps.
+
+/// A cover's items, every one blank but those given.
+fn read_answer(is_cover: bool, given: &[(&str, &str, &str)]) -> Json {
+    let keys = read::schema()["properties"]["items"]["required"].clone();
+    let mut items = serde_json::Map::new();
+    for key in keys.as_array().unwrap() {
+        items.insert(
+            key.as_str().unwrap().into(),
+            json!({"text": "", "where": ""}),
+        );
+    }
+    for (key, text, place) in given {
+        items.insert((*key).into(), json!({"text": text, "where": place}));
+    }
+    json!({"is_cover": is_cover, "kind": "comic", "items": items})
+}
+
+const BARCODE: &str = "7 59606 08936 9 00111";
+
+fn robot_cover() -> Json {
+    read_answer(
+        true,
+        &[
+            ("title", "Astonishing Robot Tales", "front, top"),
+            ("issue_number", "#1", "front, top left"),
+            ("cover_date", "March 1954", "front, top left"),
+            ("us_price", "10¢", "front, top left"),
+            ("barcode", BARCODE, "front, bottom left"),
+            ("barcode_box", "Direct Edition", "front, bottom left"),
+        ],
+    )
+}
+
+fn covers(back: bool) -> Covers {
+    let jpeg = |b: u8| Jpeg::new(vec![0xFF, 0xD8, 0xFF, b]).unwrap();
+    Covers {
+        line: 4,
+        front: jpeg(1),
+        back: back.then(|| jpeg(2)),
+    }
+}
+
+fn run_covers(provider: &Scripted, back: bool) -> (Result<Draft, LookupError>, Spent) {
+    let mut spent = Spent::default();
+    let result = look_up_covers(
+        provider,
+        &covers(back),
+        &Settings::balanced(YEAR),
+        &AtomicBool::new(false),
+        &mut spent,
+    );
+    (result, spent)
+}
+
+/// A structured answer for a photo lookup: every field blank but those
+/// given, edition fields included. The cover's items are sources 1 to 6,
+/// and the research's two pages 7 and 8.
+fn photo_structured(given: &[(&str, Json)]) -> Json {
+    let mut answer = structured(given);
+    let fields = answer["fields"].as_object_mut().unwrap();
+    for f in FIELDS.iter().filter(|f| !f.from_text) {
+        fields.entry(f.key).or_insert(value("", 0, "low"));
+    }
+    for (key, v) in given {
+        fields.insert((*key).into(), v.clone());
+    }
+    answer
+}
+
+#[test]
+fn the_cover_is_read_and_then_looked_up_like_a_line() {
+    let provider = Scripted::new(vec![
+        answered(robot_cover()),
+        researched(2),
+        answered(photo_structured(&[
+            ("series", value("Astonishing Robot Tales", 7, "high")),
+            ("cover_price", value("0.10", 4, "high")),
+            ("distribution", value("direct", 6, "high")),
+        ])),
+        no_problems(),
+    ]);
+    let (draft, spent) = run_covers(&provider, true);
+    let draft = draft.unwrap();
+    // What the cover named became the book looked up.
+    assert_eq!(draft.query.series, "Astonishing Robot Tales");
+    assert_eq!(draft.query.number.as_str(), "1");
+    assert_eq!(draft.query.line, 4);
+    // The cover's items are sources, first, and values can cite them.
+    assert_eq!(draft.sources.len(), 8);
+    assert_eq!(draft.sources[3].url, COVER_PHOTO);
+    assert_eq!(draft.sources[3].cited_text, "10¢");
+    assert_eq!(
+        draft.sources[3].title,
+        "Your cover photo: US price, front, top left"
+    );
+    let v = |key| draft.value(key).unwrap().clone();
+    assert_eq!(v("cover_price").text, "0.10");
+    assert_eq!(v("cover_price").source, Some(3));
+    assert_eq!(v("distribution").text, "direct");
+    assert_eq!(v("series").source, Some(6));
+    // The barcode, left blank by the structuring, comes from the cover,
+    // its check digit holding.
+    assert_eq!(v("barcode").text, "75960608936900111");
+    assert_eq!(v("barcode").source, Some(4));
+    assert!(v("barcode").accepted);
+    // Read, research, structure, and check all paid for.
+    assert_eq!(spent.cost, Picodollars(16 * 10_000_000_000));
+
+    let asked = provider.answers_asked.borrow();
+    // The read step gets the photos, front first, and only it does.
+    assert_eq!(asked[0].name, "cover");
+    assert_eq!(
+        asked[0].images,
+        [covers(true).front, covers(true).back.unwrap()]
+    );
+    assert!(asked[0].user.contains("second the back"));
+    assert!(asked[0].system.contains("never instructions"));
+    assert!(asked[0].system.contains("- barcode:"));
+    assert!(asked[1].images.is_empty() && asked[2].images.is_empty());
+    // The structuring asks for the edition's fields too, and is shown the
+    // cover's items as sources.
+    assert!(asked[1].schema["properties"]["fields"]["properties"]["barcode"].is_object());
+    assert!(
+        asked[1]
+            .user
+            .contains("[4] Your cover photo: US price, front, top left")
+    );
+    let research = &provider.research_asked.borrow()[0];
+    assert!(research.system.contains("the very edition shown"));
+    assert!(!research.system.contains("first printing's standard cover"));
+    assert!(research.system.contains("- barcode:"));
+    assert!(
+        research
+            .user
+            .contains("- barcode digits: \"7 59606 08936 9 00111\"")
+    );
+}
+
+#[test]
+fn a_barcode_found_online_that_differs_from_the_cover_is_doubted() {
+    let provider = Scripted::new(vec![
+        answered(robot_cover()),
+        researched(2),
+        answered(photo_structured(&[(
+            "barcode",
+            value("75960608936900211", 7, "high"),
+        )])),
+        no_problems(),
+    ]);
+    let draft = run_covers(&provider, false).0.unwrap();
+    let barcode = draft.value("barcode").unwrap();
+    assert_eq!(barcode.text, "75960608936900211");
+    assert!(!barcode.accepted);
+    assert!(barcode.note.contains("75960608936900111"));
+    assert!(
+        provider.answers_asked.borrow()[0]
+            .user
+            .contains("front cover")
+    );
+}
+
+#[test]
+fn a_misread_barcode_is_not_taken_from_the_cover() {
+    let misread = read_answer(
+        true,
+        &[
+            ("title", "Astonishing Robot Tales", "front"),
+            ("issue_number", "1", "front"),
+            ("barcode", "7 59606 08936 8 00111", "front"),
+        ],
+    );
+    let provider = Scripted::new(vec![
+        answered(misread),
+        researched(1),
+        answered(photo_structured(&[])),
+        no_problems(),
+    ]);
+    let draft = run_covers(&provider, false).0.unwrap();
+    let barcode = draft.value("barcode").unwrap();
+    assert_eq!(barcode.text, "");
+    assert!(barcode.note.contains("check digit"));
+}
+
+#[test]
+fn covers_that_name_no_book_go_no_further() {
+    for (reading, why) in [
+        (read_answer(false, &[]), "does not show a book"),
+        (
+            read_answer(true, &[("issue_number", "1", "front")]),
+            "no title",
+        ),
+        (
+            read_answer(true, &[("title", "Astonishing Robot Tales", "front")]),
+            "no issue number",
+        ),
+    ] {
+        let provider = Scripted::new(vec![answered(reading)]);
+        let (result, spent) = run_covers(&provider, false);
+        match result {
+            Err(LookupError::NoBookOnCover(text)) => assert!(text.contains(why), "{text}"),
+            other => panic!("{other:?}"),
+        }
+        // The read was still paid for, and nothing else was asked.
+        assert_eq!(spent.cost, Picodollars(2 * 10_000_000_000));
+        assert!(provider.research_asked.borrow().is_empty());
+    }
+}
+
+#[test]
+fn a_reading_that_does_not_follow_the_schema_is_refused() {
+    let mut extra = robot_cover();
+    extra["items"]["secret"] = json!({"text": "x", "where": "y"});
+    let mut missing = robot_cover();
+    missing["items"].as_object_mut().unwrap().remove("isbn");
+    let mut odd = robot_cover();
+    odd["mood"] = json!("cheerful");
+    for answer in [extra, missing, odd] {
+        let provider = Scripted::new(vec![answered(answer)]);
+        assert!(matches!(
+            run_covers(&provider, false).0,
+            Err(LookupError::Unreadable(_))
+        ));
+    }
+    // Text read from a cover is made safe to show, like any answer.
+    let reading = Reading::parse(
+        &read_answer(true, &[("title", "Robot\u{202e} Tales", "front")]).to_string(),
+    )
+    .unwrap();
+    assert_eq!(reading.get("title").unwrap().text, "Robot Tales");
+}
+
+#[test]
+fn a_photo_book_costs_its_reading_more_than_a_line() {
+    let opus = crate::cost::anthropic_price("claude-opus-5-5").unwrap();
+    let settings = Settings::balanced(YEAR);
+    let line = estimate_book(&opus, &settings);
+    let photo = estimate_photo_book(&opus, &settings, &[(1600, 2400), (1600, 2400)]);
+    assert!(photo.likely > line.likely);
+    assert!(photo.most > line.most);
+    // Two photos at most 4,784 tokens each, and the read step's text.
+    let read = planned_read(&[(1600, 2400), (1600, 2400)]);
+    assert!(read.input_tokens <= 1_500 + 2 * 4_784);
+    assert_eq!(read.images, 2);
+}

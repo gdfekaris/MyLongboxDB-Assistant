@@ -106,6 +106,17 @@ impl AnthropicLookup<'_> {
     }
 }
 
+/// A structured request's photos, then its text: models read a photo
+/// better with the question after it.
+fn parts(request: &SchemaRequest) -> Vec<Part> {
+    request
+        .images
+        .iter()
+        .map(|jpeg| Part::Jpeg(jpeg.bytes().to_vec()))
+        .chain(std::iter::once(Part::Text(request.user.clone())))
+        .collect()
+}
+
 impl Provider for AnthropicLookup<'_> {
     fn research(&self, request: &ResearchRequest, cancel: &AtomicBool) -> Reply<Research> {
         let (message, usage) = self.send(
@@ -143,7 +154,7 @@ impl Provider for AnthropicLookup<'_> {
                 model: self.model.clone(),
                 max_tokens: request.max_tokens,
                 system: request.system.clone(),
-                user: vec![Part::Text(request.user.clone())],
+                user: parts(request),
                 resume: Vec::new(),
                 web_search: None,
                 schema: Some(Schema {
@@ -240,7 +251,7 @@ impl Provider for OpenRouterLookup<'_> {
                 model: self.model.id.clone(),
                 max_tokens: request.max_tokens,
                 system: request.system.clone(),
-                user: vec![Part::Text(request.user.clone())],
+                user: parts(request),
                 web_search: None,
                 schema: Some(Schema {
                     name: request.name,
@@ -277,6 +288,28 @@ mod tests {
         fn shareable<T: Sync>() {}
         shareable::<AnthropicLookup<'static>>();
         shareable::<OpenRouterLookup<'static>>();
+    }
+
+    #[test]
+    fn photos_go_before_the_question() {
+        let jpeg = |b: u8| assistant_core::Jpeg::new(vec![0xFF, 0xD8, 0xFF, b]).unwrap();
+        let request = SchemaRequest {
+            name: "cover",
+            system: String::new(),
+            images: vec![jpeg(1), jpeg(2)],
+            user: "The first photo is the front cover.".into(),
+            schema: serde_json::json!({}),
+            effort: LookupEffort::Medium,
+            max_tokens: 100,
+        };
+        assert_eq!(
+            parts(&request),
+            [
+                Part::Jpeg(vec![0xFF, 0xD8, 0xFF, 1]),
+                Part::Jpeg(vec![0xFF, 0xD8, 0xFF, 2]),
+                Part::Text("The first photo is the front cover.".into()),
+            ]
+        );
     }
 
     #[test]

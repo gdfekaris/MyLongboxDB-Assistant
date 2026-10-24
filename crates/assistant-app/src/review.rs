@@ -7,7 +7,7 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use adw::prelude::*;
-use assistant_core::lookup::{Detail, Draft, Entry, FIELDS, Identity, Source, Value};
+use assistant_core::lookup::{COVER_PHOTO, Detail, Draft, Entry, FIELDS, Identity, Source, Value};
 use assistant_core::model::{Confidence, Role};
 use assistant_core::results::ReviewBook;
 
@@ -75,6 +75,15 @@ fn provenance(
 ) -> String {
     let mut lines = Vec::new();
     match source.and_then(|i| sources.get(i)) {
+        Some(s) if s.url == COVER_PHOTO => {
+            lines.push(gettext_f(
+                "From your cover photo ({confidence})",
+                &[("confidence", &confidence_label(confidence))],
+            ));
+            if !s.cited_text.is_empty() {
+                lines.push(format!("\u{201c}{}\u{201d}", s.cited_text));
+            }
+        }
         Some(s) => {
             lines.push(gettext_f(
                 "From {site} ({confidence})",
