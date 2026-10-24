@@ -83,6 +83,16 @@ impl Run {
     pub fn cancel(&self) {
         self.cancel.store(true, Ordering::Relaxed);
     }
+
+    /// The books that failed or were not looked up, to try again.
+    pub fn unfinished(&self) -> Vec<BookQuery> {
+        self.queries
+            .iter()
+            .zip(&self.status)
+            .filter(|(_, s)| matches!(s, Status::Failed(_) | Status::Skipped))
+            .map(|(q, _)| q.clone())
+            .collect()
+    }
 }
 
 /// A book's state in a few words.
@@ -133,6 +143,7 @@ pub struct RunPage {
     progress: gtk::Label,
     pub cancel: gtk::Button,
     pub again: gtk::Button,
+    pub retry: gtk::Button,
     pub review: gtk::Button,
 }
 
@@ -160,6 +171,13 @@ impl RunPage {
             .visible(false)
             .css_classes(["pill"])
             .build();
+        let retry = gtk::Button::builder()
+            .label(gettext("_Try Unfinished Books Again"))
+            .use_underline(true)
+            .halign(gtk::Align::Center)
+            .visible(false)
+            .css_classes(["pill"])
+            .build();
         let review = gtk::Button::builder()
             .label(gettext("_Review Results"))
             .use_underline(true)
@@ -175,6 +193,7 @@ impl RunPage {
         column.append(&list);
         column.append(&cancel);
         column.append(&review);
+        column.append(&retry);
         column.append(&again);
         let root = adw::ToolbarView::new();
         root.add_top_bar(header);
@@ -199,6 +218,7 @@ impl RunPage {
             progress,
             cancel,
             again,
+            retry,
             review,
         }
     }
@@ -256,5 +276,10 @@ impl RunPage {
         self.again.set_visible(run.finished);
         let found = run.status.iter().any(|s| matches!(s, Status::Done(_)));
         self.review.set_visible(run.finished && found);
+        let others = run
+            .status
+            .iter()
+            .any(|s| matches!(s, Status::Failed(_) | Status::Skipped));
+        self.retry.set_visible(run.finished && others);
     }
 }

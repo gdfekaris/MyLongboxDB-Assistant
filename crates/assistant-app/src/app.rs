@@ -67,6 +67,8 @@ pub enum AppMsg {
     Review(ReviewMsg),
     Edited(usize, &'static str, String),
     DiscardConfirmed(usize),
+    /// Look up again the books of a run that failed or were not reached.
+    TryAgain,
     Export,
     /// An export was written, or not: the books in it, and how many of
     /// their values were left out because they were not ticked.
@@ -124,6 +126,7 @@ impl std::fmt::Debug for AppMsg {
             Self::Review(_) => "Review",
             Self::Edited(..) => "Edited",
             Self::DiscardConfirmed(_) => "DiscardConfirmed",
+            Self::TryAgain => "TryAgain",
             Self::Export => "Export",
             Self::Exported(..) => "Exported",
         })
@@ -885,6 +888,12 @@ impl SimpleComponent for App {
         }
         {
             let sender = sender.clone();
+            run_page
+                .retry
+                .connect_clicked(move |_| sender.input(AppMsg::TryAgain));
+        }
+        {
+            let sender = sender.clone();
             review
                 .export
                 .connect_clicked(move |_| sender.input(AppMsg::Export));
@@ -1179,6 +1188,19 @@ impl SimpleComponent for App {
                         // Asked again with what was typed, to correct it.
                         self.edit_value(i, key, Some(&text));
                     }
+                }
+            }
+            AppMsg::TryAgain => {
+                let others = self
+                    .run
+                    .as_ref()
+                    .filter(|r| r.finished)
+                    .map(Run::unfinished)
+                    .unwrap_or_default();
+                if !others.is_empty() {
+                    self.pending = others;
+                    self.replacing = None;
+                    self.ask_to_run();
                 }
             }
             AppMsg::Export => self.export(),
