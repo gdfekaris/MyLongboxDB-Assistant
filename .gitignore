@@ -1,0 +1,52 @@
+# Build output
+/target/
+
+# Flatpak build state
+/.flatpak-builder/
+/_build/
+/build-dir/
+/repo/
+
+# README.md is the only prose document in this repository
+*.md
+!/README.md
+*.txt
+*.org
+*.rst
+*.adoc
+*.odt
+*.docx
+*.pdf
+/notes/
+/scratch/
+
+# Collection databases, backups, and exports
+*.sqlite
+*.sqlite3
+*.sqlite-*
+*.db
+*.db-*
+*.csv
+*.zip
+
+# Photos; only data/ may hold images
+*.heic
+*.HEIC
+*.heif
+*.jpg
+*.JPG
+*.jpeg
+*.png
+*.webp
+!/data/**
+
+# Logs, patches, editors, OS clutter
+*.log
+*.orig
+*.rej
+*.swp
+*~
+.idea/
+.vscode/
+.DS_Store
+.env

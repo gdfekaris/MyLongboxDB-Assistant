@@ -1,0 +1,17 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.93"
+license = "MIT"
+repository = "https://github.com/gdfekaris/MyLongboxDB-Assistant"
+publish = false
+
+# Arithmetic that overflows stops the app rather than wrapping into a
+# wrong size or index, as it does in development builds. Provider
+# responses and picked photos reach code that counts bytes and pixels.
+[profile.release]
+overflow-checks = true
