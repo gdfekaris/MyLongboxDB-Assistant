@@ -112,6 +112,23 @@ authors. The list grows as the app is built.
   `sha256sum -c SHA256SUMS` in `crates/assistant-net/src/roots/`,
   comparing the fingerprints with Mozilla's root store, and the rest with
   `cargo test -p assistant-net`.
+- **API keys are kept encrypted, or not at all.** A saved key is in
+  one file, `~/.var/app/io.github.gdfekaris.MyLongboxDB.Assistant/data/keys`,
+  readable only by you (mode 0600). XChaCha20-Poly1305 encrypts it under
+  a key that Argon2id derives from your passphrase (512 MiB, 3 passes,
+  about a second to unlock), and the file's header, which holds those
+  settings, is authenticated, so the file cannot be weakened unnoticed;
+  a file whose settings are below 64 MiB and 3 passes is refused. A
+  passphrase has at least 12 characters. The app forgets the key after
+  15 minutes unused. Keys never appear in error messages or printed
+  output. Verify with `cargo test -p assistant-keys`, whose tests change
+  the file's bytes, weaken its settings, and look for key text in the
+  file and in what the app prints, and with `stat -c %a` on the file.
+  This protects a copied or backed-up key file and keeps the key from
+  other sandboxed apps; it cannot protect against malware already
+  running as you, which could watch the passphrase being typed. The
+  real limit there is at the provider: give the app its own key with a
+  monthly spending limit, and revoke it at the first doubt.
 - **Every dependency is reviewed or deliberately accepted.** cargo-vet
   records, in `build-aux/supply-chain/`, which crates were audited by
   organisations whose audits are imported (Mozilla, Google, the Bytecode
