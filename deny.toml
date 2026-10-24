@@ -1,0 +1,98 @@
+# Supply-chain policy. CI fails if any rule here is violated.
+
+[graph]
+targets = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"]
+all-features = true
+
+[advisories]
+yanked = "deny"
+
+[licenses]
+confidence-threshold = 0.9
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+]
+unused-allowed-license = "allow"
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# The app's only connections are HTTPS requests to its two providers,
+# made by ureq over rustls with ring, inside the app's HTTP crate. No
+# other HTTP, socket, or TLS crate may appear anywhere in the dependency
+# graph, and the approved ones only where the HTTP crate pulls them in.
+deny = [
+    # HTTP clients and servers
+    { name = "reqwest" },
+    { name = "hyper" },
+    { name = "hyper-util" },
+    { name = "h2" },
+    { name = "h3" },
+    { name = "ureq", wrappers = ["assistant-net"], reason = "the one approved HTTP client, for the HTTP crate only" },
+    { name = "curl" },
+    { name = "curl-sys" },
+    { name = "isahc" },
+    { name = "attohttpc" },
+    { name = "surf" },
+    { name = "http-client" },
+    { name = "awc" },
+    { name = "actix-web" },
+    { name = "axum" },
+    { name = "warp" },
+    { name = "tiny_http" },
+    # WebSockets
+    { name = "tungstenite" },
+    { name = "tokio-tungstenite" },
+    { name = "async-tungstenite" },
+    # Sockets, DNS, QUIC
+    { name = "socket2" },
+    { name = "quinn" },
+    { name = "trust-dns-resolver" },
+    { name = "hickory-resolver" },
+    { name = "hickory-proto" },
+    # TLS
+    { name = "rustls", wrappers = ["ureq", "assistant-net"], reason = "the one approved TLS library, through the HTTP client only" },
+    { name = "rustls-webpki", wrappers = ["rustls", "assistant-net"], reason = "rustls's certificate checks" },
+    { name = "ring", wrappers = ["rustls", "rustls-webpki"], reason = "rustls's approved crypto provider" },
+    # Only the root certificates embedded in the HTTP crate are trusted.
+    { name = "webpki-roots" },
+    { name = "webpki-root-certs" },
+    { name = "rustls-native-certs" },
+    { name = "rustls-platform-verifier" },
+    { name = "aws-lc-rs" },
+    { name = "aws-lc-sys" },
+    { name = "aws-lc-fips-sys" },
+    { name = "native-tls" },
+    { name = "openssl" },
+    { name = "openssl-sys" },
+    { name = "tokio-rustls" },
+    { name = "tokio-native-tls" },
+    { name = "hyper-tls" },
+    { name = "hyper-rustls" },
+    # Network-capable VCS and SSH
+    { name = "git2" },
+    { name = "ssh2" },
+    { name = "libssh2-sys" },
+]
+features = [
+    # Relm4 pulls in tokio for its async runtime; its networking must
+    # stay off.
+    { name = "tokio", deny = ["net", "full"] },
+    # ureq's own TLS defaults bring other root stores and crypto
+    # providers, and SOCKS and system proxies would route around the
+    # host check.
+    { name = "ureq", deny = ["rustls", "rustls-webpki-roots", "native-tls", "native-tls-no-default", "native-tls-webpki-roots", "platform-verifier", "socks-proxy", "win-system-proxy", "cookies"] },
+    { name = "rustls", deny = ["aws-lc-rs", "aws_lc_rs", "fips", "prefer-post-quantum"] },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
