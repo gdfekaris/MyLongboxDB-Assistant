@@ -22,6 +22,14 @@ disallowed_types = "deny"
 [profile.release]
 overflow-checks = true
 
+# Deriving a key from a passphrase runs far too slowly unoptimized, which
+# would make every key-file test take seconds.
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.dev.package.blake2]
+opt-level = 3
+
 # cargo-vet's audit records live with the other build files.
 [workspace.metadata.vet]
 store = { path = "./build-aux/supply-chain" }
