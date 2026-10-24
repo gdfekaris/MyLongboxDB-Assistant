@@ -6,6 +6,7 @@ mod add;
 mod app;
 mod config;
 mod i18n;
+mod review;
 mod run;
 mod session;
 mod setup;

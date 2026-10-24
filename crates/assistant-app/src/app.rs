@@ -10,6 +10,7 @@ use assistant_core::cost::{Estimate, anthropic_price, dollars};
 use assistant_core::lines::BookQuery;
 use assistant_core::lookup::{Settings as LookupSettings, estimate_book};
 use assistant_core::queue::{self, Event, RunOptions, Summary};
+use assistant_core::results::{self, ReviewBook};
 use assistant_keys::{ApiKey, ApiKeys, KdfParams, KeyFileError, Passphrase, save, seal};
 use assistant_net::Client;
 use assistant_net::anthropic::Anthropic;
@@ -21,7 +22,8 @@ use relm4::{ComponentParts, ComponentSender, SimpleComponent};
 use crate::add::AddPage;
 use crate::config::{self, Config, ProviderChoice};
 use crate::i18n::{gettext, gettext_f};
-use crate::run::{Run, RunPage};
+use crate::review::{List, ReviewMsg, ReviewPage};
+use crate::run::{Run, RunPage, Status};
 use crate::session::{Session, passphrase_problem};
 use crate::setup::{self, SetupDone};
 use crate::unlock::{UnlockPage, open_key_file};
@@ -59,6 +61,31 @@ pub enum AppMsg {
     RunDone(Summary),
     CancelRun,
     LookUpMore,
+    ShowReview,
+    ShowAdd,
+    Review(ReviewMsg),
+    Edited(usize, &'static str, String),
+    DiscardConfirmed(usize),
+}
+
+/// Which work page is showing when the app is unlocked.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum View {
+    Add,
+    Run,
+    Review,
+}
+
+fn results_path() -> std::path::PathBuf {
+    glib::user_data_dir().join("results.json")
+}
+
+fn menu_button(menu: &gio::Menu) -> gtk::MenuButton {
+    gtk::MenuButton::builder()
+        .icon_name("open-menu-symbolic")
+        .menu_model(menu)
+        .tooltip_text(gettext("Main Menu"))
+        .build()
 }
 
 impl std::fmt::Debug for AppMsg {
@@ -87,6 +114,11 @@ impl std::fmt::Debug for AppMsg {
             Self::RunDone(_) => "RunDone",
             Self::CancelRun => "CancelRun",
             Self::LookUpMore => "LookUpMore",
+            Self::ShowReview => "ShowReview",
+            Self::ShowAdd => "ShowAdd",
+            Self::Review(_) => "Review",
+            Self::Edited(..) => "Edited",
+            Self::DiscardConfirmed(_) => "DiscardConfirmed",
         })
     }
 }
@@ -102,6 +134,13 @@ pub struct App {
     add: Rc<AddPage>,
     run_page: RunPage,
     run: Option<Run>,
+    review: ReviewPage,
+    review_button: gtk::Button,
+    /// Looked-up books kept until exported.
+    results: Vec<ReviewBook>,
+    view: View,
+    /// The result a pending lookup of a picked candidate replaces.
+    replacing: Option<usize>,
     /// The books waiting for the owner to confirm their run.
     pending: Vec<BookQuery>,
     toasts: adw::ToastOverlay,
@@ -129,16 +168,188 @@ impl App {
         self.unlock.entry.grab_focus();
     }
 
-    /// The page for work: a run while there is one, or adding books.
+    /// The work page the owner was on.
     fn show_work(&self) {
-        match &self.run {
-            Some(run) => {
+        match (self.view, &self.run) {
+            (View::Run, Some(run)) => {
                 self.run_page.show(run);
                 self.stack.set_visible_child_name("run");
             }
-            None => self.stack.set_visible_child_name("add"),
+            (View::Review, _) if !self.results.is_empty() => {
+                self.review.show_list(&self.results);
+                self.stack.set_visible_child_name("review");
+            }
+            _ => self.stack.set_visible_child_name("add"),
         }
         self.setup_holder.set_child(None::<&gtk::Widget>);
+    }
+
+    /// Works out the pending books' cost, then asks the owner to confirm.
+    fn ask_to_run(&self) {
+        let count = self.pending.len() as u64;
+        let settings = self.lookup_settings();
+        match self.config.provider {
+            Some(ProviderChoice::OpenRouter) => {
+                let Some(key) = self.session.key(ProviderChoice::OpenRouter).cloned() else {
+                    return;
+                };
+                let (client, model) = (self.client.clone(), self.config.model.clone());
+                let job = gio::spawn_blocking(move || {
+                    OpenRouter::new(&client, &key)
+                        .models(&AtomicBool::new(false))
+                        .ok()
+                        .and_then(|models| models.into_iter().find(|m| m.id == model))
+                        .and_then(|m| m.price())
+                        .map(|price| estimate_book(&price, &settings).times(count))
+                });
+                let sender = self.sender.clone();
+                glib::spawn_future_local(async move {
+                    sender.input(AppMsg::Estimated(job.await.ok().flatten()));
+                });
+            }
+            _ => {
+                let estimate = anthropic_price(&self.config.model)
+                    .map(|price| estimate_book(&price, &settings).times(count));
+                self.confirm_run(estimate);
+            }
+        }
+    }
+
+    fn save_results(&self) {
+        if let Err(e) = results::save(&results_path(), &self.results) {
+            self.toast(&gettext_f(
+                "The looked-up books could not be saved: {why}",
+                &[("why", &e.to_string())],
+            ));
+        }
+        self.review.show_list(&self.results);
+        self.review_button.set_visible(!self.results.is_empty());
+    }
+
+    fn edit_value(&self, index: usize, key: &'static str, typed: Option<&str>) {
+        let Some(book) = self.results.get(index) else {
+            return;
+        };
+        let Some(field) = assistant_core::lookup::spec(key) else {
+            return;
+        };
+        let entry = adw::EntryRow::builder()
+            .title(gettext(field.label))
+            .activates_default(true)
+            .build();
+        entry.set_text(
+            typed.unwrap_or_else(|| book.draft.value(key).map_or("", |v| v.text.as_str())),
+        );
+        let list = gtk::ListBox::builder()
+            .selection_mode(gtk::SelectionMode::None)
+            .css_classes(["boxed-list"])
+            .build();
+        list.append(&entry);
+        let dialog = adw::AlertDialog::builder()
+            .heading(gettext_f(
+                "Edit {field}",
+                &[("field", &gettext(field.label))],
+            ))
+            .body(gettext(field.hint))
+            .extra_child(&list)
+            .close_response("cancel")
+            .default_response("save")
+            .build();
+        dialog.set_property("focus-widget", &entry);
+        dialog.add_responses(&[("cancel", &gettext("_Cancel")), ("save", &gettext("_Save"))]);
+        dialog.set_response_appearance("save", adw::ResponseAppearance::Suggested);
+        let sender = self.sender.clone();
+        dialog.choose(
+            Some(&self.window),
+            None::<&gio::Cancellable>,
+            move |response| {
+                if response == "save" {
+                    sender.input(AppMsg::Edited(index, key, entry.text().to_string()));
+                }
+            },
+        );
+    }
+
+    fn confirm_discard(&self, index: usize) {
+        let dialog = adw::AlertDialog::builder()
+            .heading(gettext("Discard This Book?"))
+            .body(gettext(
+                "Its looked-up details are deleted. Looking it up again costs as much again.",
+            ))
+            .close_response("cancel")
+            .build();
+        dialog.add_responses(&[
+            ("cancel", &gettext("_Cancel")),
+            ("discard", &gettext("_Discard")),
+        ]);
+        dialog.set_response_appearance("discard", adw::ResponseAppearance::Destructive);
+        let sender = self.sender.clone();
+        dialog.choose(
+            Some(&self.window),
+            None::<&gio::Cancellable>,
+            move |response| {
+                if response == "discard" {
+                    sender.input(AppMsg::DiscardConfirmed(index));
+                }
+            },
+        );
+    }
+
+    fn review_msg(&mut self, msg: ReviewMsg) {
+        match msg {
+            ReviewMsg::Open(i) => {
+                if let Some(book) = self.results.get(i) {
+                    self.review.show_book(i, book);
+                }
+            }
+            ReviewMsg::Include(i, on) => {
+                if let Some(book) = self.results.get_mut(i) {
+                    book.included =
+                        on && book.draft.identity == assistant_core::lookup::Identity::Identified;
+                    self.save_results();
+                }
+            }
+            ReviewMsg::AcceptValue(i, key, on) => {
+                let value = self
+                    .results
+                    .get_mut(i)
+                    .and_then(|b| b.draft.values.iter_mut().find(|v| v.key == key));
+                if let Some(value) = value {
+                    value.accepted = on && !value.text.is_empty();
+                    self.save_results();
+                }
+            }
+            ReviewMsg::AcceptEntry(i, list, n, on) => {
+                let entry = self.results.get_mut(i).and_then(|b| {
+                    let d = &mut b.draft;
+                    match list {
+                        List::Credits => d.credits.get_mut(n),
+                        List::Characters => d.characters.get_mut(n),
+                        List::Teams => d.teams.get_mut(n),
+                        List::Arcs => d.story_arcs.get_mut(n),
+                    }
+                });
+                if let Some(entry) = entry {
+                    entry.accepted = on;
+                    self.save_results();
+                }
+            }
+            ReviewMsg::Edit(i, key) => self.edit_value(i, key, None),
+            ReviewMsg::Discard(i) => self.confirm_discard(i),
+            ReviewMsg::Choose(i, n) => {
+                let query = self.results.get(i).and_then(|b| match &b.draft.identity {
+                    assistant_core::lookup::Identity::Ambiguous(candidates) => candidates
+                        .get(n)
+                        .map(|c| assistant_core::lookup::choose(&b.draft.query, c)),
+                    _ => None,
+                });
+                if let Some(query) = query {
+                    self.pending = vec![query];
+                    self.replacing = Some(i);
+                    self.ask_to_run();
+                }
+            }
+        }
     }
 
     fn lookup_settings(&self) -> LookupSettings {
@@ -241,9 +452,11 @@ impl App {
             return;
         };
         let queries = std::mem::take(&mut self.pending);
-        let run = Run::new(queries.clone());
+        let mut run = Run::new(queries.clone());
+        run.replaces = self.replacing.take();
         let cancel = run.cancel.clone();
         self.run = Some(run);
+        self.view = View::Run;
         self.show_work();
         let options = RunOptions {
             batch: self.config.batch,
@@ -481,6 +694,17 @@ impl SimpleComponent for App {
                 .build(),
         );
         let run_page = RunPage::new(&run_header);
+        let review = {
+            let sender = sender.clone();
+            ReviewPage::new(&menu_button(&menu), move |msg| {
+                sender.input(AppMsg::Review(msg))
+            })
+        };
+        let review_button = gtk::Button::builder()
+            .label(gettext("_Review"))
+            .use_underline(true)
+            .build();
+        header.pack_start(&review_button);
 
         let stack = gtk::Stack::builder()
             .transition_type(gtk::StackTransitionType::Crossfade)
@@ -489,6 +713,7 @@ impl SimpleComponent for App {
         stack.add_named(&unlock.root, Some("unlock"));
         stack.add_named(&add.root, Some("add"));
         stack.add_named(&run_page.root, Some("run"));
+        stack.add_named(&review.root, Some("review"));
         let toasts = adw::ToastOverlay::new();
         toasts.set_child(Some(&stack));
         window.set_content(Some(&toasts));
@@ -556,6 +781,29 @@ impl SimpleComponent for App {
                 .again
                 .connect_clicked(move |_| sender.input(AppMsg::LookUpMore));
         }
+        for button in [&run_page.review, &review_button] {
+            let sender = sender.clone();
+            button.connect_clicked(move |_| sender.input(AppMsg::ShowReview));
+        }
+        {
+            let sender = sender.clone();
+            review
+                .add_books
+                .connect_clicked(move |_| sender.input(AppMsg::ShowAdd));
+        }
+        // Results that cannot be read are set aside rather than lost, and
+        // rather than overwritten by the next save.
+        let (results, unreadable) = match results::load(&results_path(), this_year()) {
+            Ok(results) => (results, None),
+            Err(why) => {
+                let _ = std::fs::rename(
+                    results_path(),
+                    results_path().with_extension("unreadable.json"),
+                );
+                (Vec::new(), Some(why))
+            }
+        };
+        review_button.set_visible(!results.is_empty());
         let model = Self {
             session: Session::locked(config::key_file().exists(), Instant::now()),
             config,
@@ -567,7 +815,12 @@ impl SimpleComponent for App {
             add,
             run_page,
             run: None,
+            review,
+            review_button,
+            results,
+            view: View::Add,
             pending: Vec::new(),
+            replacing: None,
             toasts,
             sender,
         };
@@ -576,6 +829,13 @@ impl SimpleComponent for App {
         model.action("setup", || AppMsg::SetUpAgain);
         model.action("forget", || AppMsg::Forget);
         model.show_start();
+        model.review.show_list(&model.results);
+        if let Some(why) = unreadable {
+            model.toast(&gettext_f(
+                "The saved looked-up books could not be read and were set aside: {why}",
+                &[("why", &why)],
+            ));
+        }
         ComponentParts { model, widgets: () }
     }
 
@@ -705,35 +965,9 @@ impl SimpleComponent for App {
                 if books.is_empty() || !problems.is_empty() || books.len() > self.config.batch {
                     return;
                 }
-                let count = books.len() as u64;
                 self.pending = books;
-                let settings = self.lookup_settings();
-                match self.config.provider {
-                    Some(ProviderChoice::OpenRouter) => {
-                        let Some(key) = self.session.key(ProviderChoice::OpenRouter).cloned()
-                        else {
-                            return;
-                        };
-                        let (client, model) = (self.client.clone(), self.config.model.clone());
-                        let job = gio::spawn_blocking(move || {
-                            OpenRouter::new(&client, &key)
-                                .models(&AtomicBool::new(false))
-                                .ok()
-                                .and_then(|models| models.into_iter().find(|m| m.id == model))
-                                .and_then(|m| m.price())
-                                .map(|price| estimate_book(&price, &settings).times(count))
-                        });
-                        let sender = sender.clone();
-                        glib::spawn_future_local(async move {
-                            sender.input(AppMsg::Estimated(job.await.ok().flatten()));
-                        });
-                    }
-                    _ => {
-                        let estimate = anthropic_price(&self.config.model)
-                            .map(|price| estimate_book(&price, &settings).times(count));
-                        self.confirm_run(estimate);
-                    }
-                }
+                self.replacing = None;
+                self.ask_to_run();
             }
             AppMsg::Estimated(estimate) => self.confirm_run(estimate),
             AppMsg::Confirmed(Some(passphrase)) => {
@@ -759,6 +993,29 @@ impl SimpleComponent for App {
                     run.apply(event);
                     self.run_page.show(run);
                 }
+                // Each looked-up book is kept as soon as it is done; a
+                // picked candidate's takes its unsettled entry's place.
+                let (found, replaces) = self.run.as_ref().map_or((Vec::new(), None), |run| {
+                    let found = run
+                        .status
+                        .iter()
+                        .filter_map(|s| match s {
+                            Status::Done(draft) => Some(draft.as_ref().clone()),
+                            _ => None,
+                        })
+                        .collect::<Vec<_>>();
+                    (found, run.replaces)
+                });
+                for draft in found {
+                    if self.results.iter().any(|b| b.draft == draft) {
+                        continue;
+                    }
+                    match replaces.filter(|i| *i < self.results.len()) {
+                        Some(i) => self.results[i] = ReviewBook::new(draft),
+                        None => self.results.push(ReviewBook::new(draft)),
+                    }
+                    self.save_results();
+                }
             }
             AppMsg::RunDone(summary) => {
                 if let Some(run) = &mut self.run {
@@ -776,7 +1033,55 @@ impl SimpleComponent for App {
                 if self.run.as_ref().is_some_and(|r| r.finished) {
                     self.run = None;
                     self.add.clear();
+                    self.view = View::Add;
                     self.show_work();
+                }
+            }
+            AppMsg::ShowReview => {
+                if self.run.as_ref().is_some_and(|r| r.finished) {
+                    self.run = None;
+                    self.add.clear();
+                }
+                self.view = View::Review;
+                self.review.close_book();
+                self.show_work();
+            }
+            AppMsg::ShowAdd => {
+                self.view = if self.run.is_some() {
+                    View::Run
+                } else {
+                    View::Add
+                };
+                self.show_work();
+            }
+            AppMsg::Review(msg) => self.review_msg(msg),
+            AppMsg::Edited(i, key, text) => {
+                let Some(book) = self.results.get_mut(i) else {
+                    return;
+                };
+                match book.draft.set_value(key, &text, this_year()) {
+                    Ok(()) => {
+                        self.save_results();
+                        if let Some(book) = self.results.get(i) {
+                            self.review.refresh_book(i, book);
+                        }
+                    }
+                    Err(why) => {
+                        self.toast(&why);
+                        // Asked again with what was typed, to correct it.
+                        self.edit_value(i, key, Some(&text));
+                    }
+                }
+            }
+            AppMsg::DiscardConfirmed(i) => {
+                if i < self.results.len() {
+                    self.results.remove(i);
+                    self.review.close_book();
+                    self.save_results();
+                    if self.results.is_empty() {
+                        self.view = View::Add;
+                        self.show_work();
+                    }
                 }
             }
             AppMsg::Forgotten => {

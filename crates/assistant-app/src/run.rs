@@ -28,6 +28,9 @@ pub struct Run {
     pub spent: Spent,
     pub cancel: Arc<AtomicBool>,
     pub finished: bool,
+    /// The kept result this run's one book replaces, when it looks up a
+    /// candidate the owner picked.
+    pub replaces: Option<usize>,
 }
 
 impl Run {
@@ -39,6 +42,7 @@ impl Run {
             spent: Spent::default(),
             cancel: Arc::new(AtomicBool::new(false)),
             finished: false,
+            replaces: None,
         }
     }
 
@@ -129,6 +133,7 @@ pub struct RunPage {
     progress: gtk::Label,
     pub cancel: gtk::Button,
     pub again: gtk::Button,
+    pub review: gtk::Button,
 }
 
 impl RunPage {
@@ -155,6 +160,13 @@ impl RunPage {
             .visible(false)
             .css_classes(["pill"])
             .build();
+        let review = gtk::Button::builder()
+            .label(gettext("_Review Results"))
+            .use_underline(true)
+            .halign(gtk::Align::Center)
+            .visible(false)
+            .css_classes(["pill", "suggested-action"])
+            .build();
         let column = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .spacing(18)
@@ -162,6 +174,7 @@ impl RunPage {
         column.append(&progress);
         column.append(&list);
         column.append(&cancel);
+        column.append(&review);
         column.append(&again);
         let root = adw::ToolbarView::new();
         root.add_top_bar(header);
@@ -186,6 +199,7 @@ impl RunPage {
             progress,
             cancel,
             again,
+            review,
         }
     }
 
@@ -240,5 +254,7 @@ impl RunPage {
         self.cancel
             .set_sensitive(!run.cancel.load(Ordering::Relaxed));
         self.again.set_visible(run.finished);
+        let found = run.status.iter().any(|s| matches!(s, Status::Done(_)));
+        self.review.set_visible(run.finished && found);
     }
 }
