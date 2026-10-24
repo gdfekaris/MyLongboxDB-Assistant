@@ -40,6 +40,37 @@ jobs:
       # Every crate must be audited, by us or by an organisation whose
       # audits are imported, or be listed as accepted as it was.
       - run: cargo vet --locked
+      - name: Test crates that need no GTK
+        run: cargo test --locked -p assistant-core
+
+  contract:
+    name: Exports import into MyLongboxDB
+    runs-on: ubuntu-24.04
+    env:
+      # The MyLongboxDB release whose import the export must satisfy.
+      # Moving it is a deliberate commit.
+      MYLONGBOXDB_TAG: v0.1.6
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: gdfekaris/MyLongboxDB
+          ref: ${{ env.MYLONGBOXDB_TAG }}
+          path: mylongboxdb
+          persist-credentials: false
+      - name: Install the pinned toolchain
+        run: rustup toolchain install
+      - name: Write the test export
+        env:
+          ASSISTANT_CONTRACT_OUT: ${{ runner.temp }}/exports
+        run: cargo test --locked -p assistant-core --test export
+      - name: Import it with MyLongboxDB's own code
+        working-directory: mylongboxdb
+        run: |
+          cp -r ../build-aux/contract crates/assistant-contract
+          cargo run -p assistant-contract -- "$RUNNER_TEMP"/exports/*.zip
 
   sdk:
     name: Clippy and tests in the GNOME SDK
@@ -143,7 +174,7 @@ jobs:
   release:
     name: Publish the release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [policy, sdk, flatpak]
+    needs: [policy, contract, sdk, flatpak]
     runs-on: ubuntu-24.04
     permissions:
       contents: write

@@ -1,0 +1,15 @@
+# Built by CI inside a checkout of MyLongboxDB at the release pinned in the
+# workflow, as a member of that workspace, so it imports the Assistant's
+# export with MyLongboxDB's own code. Not part of this workspace.
+[package]
+name = "assistant-contract"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[dependencies]
+mylongbox-core = { path = "../mylongbox-core" }
+mylongbox-media = { path = "../mylongbox-media" }
+csv = "1.4.0"
+zip = { version = "9.0.4", default-features = false, features = ["deflate-flate2-zlib-rs"] }
