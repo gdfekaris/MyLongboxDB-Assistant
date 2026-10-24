@@ -9,3 +9,10 @@ publish.workspace = true
 
 [lints]
 workspace = true
+
+[dependencies]
+# The export: collection.csv inside a zip archive, as MyLongboxDB writes
+# its full exports, with the same versions and features it uses.
+csv = "1.4.0"
+zip = { version = "9.0.4", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+uuid = { version = "1.28.0", default-features = false, features = ["std", "v4"] }

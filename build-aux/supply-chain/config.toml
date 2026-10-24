@@ -38,8 +38,16 @@ criteria = "safe-to-deploy"
 version = "0.20.10"
 criteria = "safe-to-deploy"
 
+[[exemptions.crc32fast]]
+version = "1.5.2"
+criteria = "safe-to-deploy"
+
 [[exemptions.field-offset]]
 version = "0.3.6"
+criteria = "safe-to-deploy"
+
+[[exemptions.flate2]]
+version = "1.1.10"
 criteria = "safe-to-deploy"
 
 [[exemptions.flume]]
@@ -162,6 +170,10 @@ criteria = "safe-to-deploy"
 version = "0.9.1"
 criteria = "safe-to-deploy"
 
+[[exemptions.nix]]
+version = "0.31.3"
+criteria = "safe-to-deploy"
+
 [[exemptions.once_cell]]
 version = "1.21.4"
 criteria = "safe-to-deploy"
@@ -226,6 +238,14 @@ criteria = "safe-to-deploy"
 version = "0.1.44"
 criteria = "safe-to-deploy"
 
+[[exemptions.typed-path]]
+version = "0.12.3"
+criteria = "safe-to-deploy"
+
+[[exemptions.uuid]]
+version = "1.28.0"
+criteria = "safe-to-deploy"
+
 [[exemptions.wasm-bindgen]]
 version = "0.2.129"
 criteria = "safe-to-deploy"
@@ -244,4 +264,12 @@ criteria = "safe-to-deploy"
 
 [[exemptions.windows-sys]]
 version = "0.61.2"
+criteria = "safe-to-deploy"
+
+[[exemptions.zip]]
+version = "9.0.4"
+criteria = "safe-to-deploy"
+
+[[exemptions.zlib-rs]]
+version = "0.6.8"
 criteria = "safe-to-deploy"
