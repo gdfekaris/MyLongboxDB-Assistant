@@ -41,7 +41,7 @@ jobs:
       # audits are imported, or be listed as accepted as it was.
       - run: cargo vet --locked
       - name: Test crates that need no GTK
-        run: cargo test --locked -p assistant-core -p assistant-keys -p assistant-net
+        run: cargo test --locked -p assistant-core -p assistant-keys -p assistant-net -p assistant-media
       - name: The embedded root certificates are the ones listed
         working-directory: crates/assistant-net/src/roots
         run: sha256sum --check --strict SHA256SUMS

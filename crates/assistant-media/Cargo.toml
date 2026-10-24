@@ -1,0 +1,23 @@
+[package]
+name = "assistant-media"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
+# Already built as part of image; used directly for full ICC profiles,
+# which image's own conversions do not read.
+moxcms = "0.8.1"
+# Reading HEIC needs libheif, which a plain host may lack, so it sits
+# behind a feature. The Flatpak builds libheif with its HEVC decoder.
+libheif-rs = { version = "3.0.0", default-features = false, features = ["v1_20"], optional = true }
+
+[features]
+heic = ["dep:libheif-rs"]

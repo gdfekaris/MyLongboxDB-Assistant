@@ -50,6 +50,10 @@ criteria = "safe-to-deploy"
 version = "0.12.1"
 criteria = "safe-to-deploy"
 
+[[exemptions.byteorder-lite]]
+version = "0.1.0"
+criteria = "safe-to-deploy"
+
 [[exemptions.bytes]]
 version = "1.12.1"
 criteria = "safe-to-deploy"
@@ -114,6 +118,10 @@ criteria = "safe-to-deploy"
 version = "0.12.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.four-cc]]
+version = "0.4.0"
+criteria = "safe-to-deploy"
+
 [[exemptions.fragile]]
 version = "2.1.0"
 criteria = "safe-to-deploy"
@@ -144,10 +152,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.getrandom]]
 version = "0.2.2"
-criteria = "safe-to-deploy"
-
-[[exemptions.getrandom]]
-version = "0.4.3"
 criteria = "safe-to-deploy"
 
 [[exemptions.gio]]
@@ -218,6 +222,14 @@ criteria = "safe-to-deploy"
 version = "0.4.15"
 criteria = "safe-to-deploy"
 
+[[exemptions.image]]
+version = "0.25.10"
+criteria = "safe-to-deploy"
+
+[[exemptions.image-webp]]
+version = "0.2.4"
+criteria = "safe-to-deploy"
+
 [[exemptions.indexmap]]
 version = "2.14.2"
 criteria = "safe-to-deploy"
@@ -242,6 +254,14 @@ criteria = "safe-to-deploy"
 version = "0.2.190"
 criteria = "safe-to-deploy"
 
+[[exemptions.libheif-rs]]
+version = "3.0.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.libheif-sys]]
+version = "5.3.1+1.23.1"
+criteria = "safe-to-deploy"
+
 [[exemptions.lock_api]]
 version = "0.4.14"
 criteria = "safe-to-deploy"
@@ -252,6 +272,14 @@ criteria = "safe-to-deploy"
 
 [[exemptions.memoffset]]
 version = "0.9.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.miniz_oxide]]
+version = "0.9.1"
+criteria = "safe-to-deploy"
+
+[[exemptions.moxcms]]
+version = "0.8.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.nix]]
@@ -278,12 +306,24 @@ criteria = "safe-to-deploy"
 version = "0.6.1"
 criteria = "safe-to-deploy"
 
+[[exemptions.png]]
+version = "0.18.1"
+criteria = "safe-to-deploy"
+
 [[exemptions.poly1305]]
 version = "0.9.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.proc-macro-crate]]
 version = "3.5.0"
+criteria = "safe-to-deploy"
+
+[[exemptions.pxfm]]
+version = "0.1.30"
+criteria = "safe-to-deploy"
+
+[[exemptions.quick-error]]
+version = "2.0.1"
 criteria = "safe-to-deploy"
 
 [[exemptions.r-efi]]
@@ -314,6 +354,10 @@ criteria = "safe-to-deploy"
 version = "0.103.10"
 criteria = "safe-to-deploy"
 
+[[exemptions.simd-adler32]]
+version = "0.3.10"
+criteria = "safe-to-deploy"
+
 [[exemptions.smallvec]]
 version = "1.16.3"
 criteria = "safe-to-deploy"
@@ -324,6 +368,10 @@ criteria = "safe-to-deploy"
 
 [[exemptions.system-deps]]
 version = "7.0.8"
+criteria = "safe-to-deploy"
+
+[[exemptions.system-deps]]
+version = "8.0.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.system-deps]]
@@ -448,4 +496,12 @@ criteria = "safe-to-deploy"
 
 [[exemptions.zlib-rs]]
 version = "0.6.8"
+criteria = "safe-to-deploy"
+
+[[exemptions.zune-core]]
+version = "0.5.3"
+criteria = "safe-to-deploy"
+
+[[exemptions.zune-jpeg]]
+version = "0.5.15"
 criteria = "safe-to-deploy"

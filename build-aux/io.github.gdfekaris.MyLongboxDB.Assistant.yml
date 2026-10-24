@@ -17,6 +17,85 @@ finish-args:
 build-options:
   append-path: /usr/lib/sdk/rust-stable/bin
 modules:
+  # The runtime's libheif cannot read HEVC, the format iPhone photos use,
+  # so a copy with the libde265 decoder is built here. Only that decoder
+  # is enabled, and plugin loading is off so no other code is loaded.
+  - name: libde265
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DENABLE_ENCODER=OFF
+      - -DENABLE_SDL=OFF
+      - -DENABLE_SHERLOCK265=OFF
+      - -DENABLE_INTERNAL_DEVELOPMENT_TOOLS=OFF
+    cleanup:
+      - /bin
+      - /include
+      - /lib/cmake
+      - /lib/libde265.so
+      - /lib/pkgconfig
+    sources:
+      - type: archive
+        url: https://github.com/strukturag/libde265/releases/download/v1.1.3/libde265-1.1.3.tar.gz
+        sha256: 554228bd17788c99a7e63b37ab5634722190e6e2bf60c1dcb01cef328e133905
+        # Lets Flathub's external data checker propose each new release.
+        x-checker-data:
+          type: json
+          url: https://api.github.com/repos/strukturag/libde265/releases/latest
+          version-query: .tag_name | sub("^v"; "")
+          url-query: .assets[] | select(.name == "libde265-" + $version + ".tar.gz")
+            | .browser_download_url
+
+  - name: libheif
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DENABLE_PLUGIN_LOADING=OFF
+      - -DWITH_LIBDE265=ON
+      - -DWITH_LIBDE265_PLUGIN=OFF
+      - -DWITH_X265=OFF
+      - -DWITH_X264=OFF
+      - -DWITH_KVAZAAR=OFF
+      - -DWITH_UVG266=OFF
+      - -DWITH_VVDEC=OFF
+      - -DWITH_VVENC=OFF
+      - -DWITH_OpenH264_DECODER=OFF
+      - -DWITH_DAV1D=OFF
+      - -DWITH_AOM_DECODER=OFF
+      - -DWITH_AOM_ENCODER=OFF
+      - -DWITH_SvtEnc=OFF
+      - -DWITH_RAV1E=OFF
+      - -DWITH_JPEG_DECODER=OFF
+      - -DWITH_JPEG_ENCODER=OFF
+      - -DWITH_OpenJPEG_DECODER=OFF
+      - -DWITH_OpenJPEG_ENCODER=OFF
+      - -DWITH_OPENJPH_ENCODER=OFF
+      - -DWITH_FFMPEG_DECODER=OFF
+      - -DWITH_UNCOMPRESSED_CODEC=OFF
+      - -DWITH_HEADER_COMPRESSION=OFF
+      - -DWITH_WEBCODECS=OFF
+      - -DWITH_LIBSHARPYUV=OFF
+      - -DWITH_GDK_PIXBUF=OFF
+      - -DWITH_EXAMPLES=OFF
+      - -DWITH_FUZZERS=OFF
+      - -DBUILD_TESTING=OFF
+      - -DBUILD_DOCUMENTATION=OFF
+    cleanup:
+      - /include
+      - /lib/cmake
+      - /lib/libheif.so
+      - /lib/pkgconfig
+    sources:
+      - type: archive
+        url: https://github.com/strukturag/libheif/releases/download/v1.23.6/libheif-1.23.6.tar.gz
+        sha256: 4484346dc5995319dbc11e3a1c35d0a2ec46511ce370900869337fd2c7033125
+        x-checker-data:
+          type: json
+          url: https://api.github.com/repos/strukturag/libheif/releases/latest
+          version-query: .tag_name | sub("^v"; "")
+          url-query: .assets[] | select(.name == "libheif-" + $version + ".tar.gz")
+            | .browser_download_url
+
   - name: mylongboxdb-assistant
     buildsystem: simple
     build-options:
@@ -31,6 +110,15 @@ modules:
       - for size in 16 32 48 64 128 256 512; do install -Dm644
         data/icons/hicolor/${size}x${size}/apps/io.github.gdfekaris.MyLongboxDB.Assistant.png
         -t /app/share/icons/hicolor/${size}x${size}/apps/ || exit 1; done
+    # Photo reading is tested here too, against the libheif built above,
+    # so the decoder the app ships is the one tested.
+    run-tests: true
+    test-commands:
+      - cargo --offline test --release --locked -p assistant-media --features heic
+        -- --include-ignored
+      # The SDK has a libheif of its own, which reads HEVC through plugins;
+      # the tests must have used the one above instead.
+      - ldd target/release/deps/assistant_media-* | grep 'libheif.so.1 => /app/lib/'
     sources:
       - type: dir
         path: ..
