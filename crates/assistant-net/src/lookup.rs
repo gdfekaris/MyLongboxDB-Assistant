@@ -31,6 +31,11 @@ fn effort(effort: LookupEffort) -> Effort {
 fn failure(error: NetError) -> Failure {
     match error {
         NetError::Cancelled => Failure::Cancelled,
+        // A rejected key, missing permission, or an account without
+        // credit fails every request alike.
+        NetError::Status {
+            status: 401..=403, ..
+        } => Failure::Refused(error.to_string()),
         other => Failure::Failed(other.to_string()),
     }
 }
@@ -306,6 +311,26 @@ mod tests {
             completed(&answer(Finish::ContentFilter)),
             Err(Failure::Declined(None))
         );
+    }
+
+    #[test]
+    fn a_refused_key_or_account_is_told_apart() {
+        for status in [401, 402, 403] {
+            let refused = failure(NetError::Status {
+                status,
+                kind: String::new(),
+                message: String::new(),
+                retry_after: None,
+            });
+            assert!(matches!(refused, Failure::Refused(_)), "{status}");
+        }
+        let other = failure(NetError::Status {
+            status: 400,
+            kind: String::new(),
+            message: String::new(),
+            retry_after: None,
+        });
+        assert!(matches!(other, Failure::Failed(_)));
     }
 
     #[test]

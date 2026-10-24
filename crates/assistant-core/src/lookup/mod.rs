@@ -159,6 +159,9 @@ pub enum Failure {
     Cut,
     /// The request failed: a network or provider error, said plainly.
     Failed(String),
+    /// The provider refused the key or the account, such as a revoked
+    /// key or no credit left, so every other request would fail too.
+    Refused(String),
     Cancelled,
 }
 
@@ -226,6 +229,9 @@ impl std::fmt::Display for LookupError {
             }
             Self::Failed(Failure::Cut) => f.write_str("the model's answer was cut off"),
             Self::Failed(Failure::Failed(why)) => f.write_str(why),
+            Self::Failed(Failure::Refused(why)) => {
+                write!(f, "the provider refused the key or the account: {why}")
+            }
             Self::Failed(Failure::Cancelled) => f.write_str("cancelled"),
             Self::Unreadable(why) => write!(f, "the model's answer could not be read: {why}"),
         }
@@ -531,7 +537,7 @@ fn effort_note(failure: &Failure) -> String {
     match failure {
         Failure::Declined(_) => "the check declined".into(),
         Failure::Cut => "the check's answer was cut off".into(),
-        Failure::Failed(why) => format!("the check failed: {why}"),
+        Failure::Failed(why) | Failure::Refused(why) => format!("the check failed: {why}"),
         Failure::Cancelled => "cancelled".into(),
     }
 }

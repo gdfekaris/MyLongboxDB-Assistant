@@ -86,6 +86,9 @@ impl std::error::Error for RunError {}
 #[derive(Default)]
 struct Shared {
     next: usize,
+    /// Set once the provider refuses the key or account, after which no
+    /// other book is started: each would be refused the same way.
+    refused: bool,
     summary: Summary,
     /// The most the books under way can still cost.
     set_aside: i64,
@@ -132,7 +135,7 @@ pub fn run(
                                 .saturating_add(most.0)
                                 <= limit.0
                         });
-                        let start = affordable && !cancel.load(Ordering::Relaxed);
+                        let start = affordable && !s.refused && !cancel.load(Ordering::Relaxed);
                         if start {
                             s.set_aside = s
                                 .set_aside
@@ -161,6 +164,14 @@ pub fn run(
                             .set_aside
                             .saturating_sub(options.cost_limit.map_or(0, |(_, m)| m.0));
                         s.summary.spent.add(spent);
+                        if matches!(
+                            result,
+                            Err(crate::lookup::LookupError::Failed(
+                                crate::lookup::Failure::Refused(_)
+                            ))
+                        ) {
+                            s.refused = true;
+                        }
                         if result.is_ok() {
                             s.summary.finished += 1;
                         } else {
@@ -323,6 +334,41 @@ mod tests {
         let summary = summary.unwrap();
         assert_eq!(summary.skipped, 4);
         assert_eq!(summary.spent.cost, Picodollars(CENT));
+    }
+
+    /// Refuses the key on every request.
+    struct Refusing;
+
+    impl Provider for Refusing {
+        fn research(&self, _: &ResearchRequest, _: &AtomicBool) -> Reply<Research> {
+            std::thread::sleep(Duration::from_millis(10));
+            Reply {
+                answer: Err(Failure::Refused("401".into())),
+                spent: Spent::of(Usage::default(), Some(Picodollars(0))),
+            }
+        }
+
+        fn answer(&self, _: &SchemaRequest, _: &AtomicBool) -> Reply<String> {
+            unreachable!()
+        }
+    }
+
+    #[test]
+    fn a_refused_key_stops_the_run() {
+        let options = RunOptions {
+            workers: 1,
+            ..RunOptions::new(Settings::balanced(YEAR))
+        };
+        let summary = run(
+            &Refusing,
+            &books(5),
+            &options,
+            &AtomicBool::new(false),
+            &|_| {},
+        )
+        .unwrap();
+        assert_eq!(summary.failed, 1);
+        assert_eq!(summary.skipped, 4);
     }
 
     #[test]
