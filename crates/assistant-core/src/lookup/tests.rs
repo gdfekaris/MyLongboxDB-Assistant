@@ -394,3 +394,29 @@ fn an_edit_that_no_longer_reads_is_left_out() {
     }
     assert_eq!(draft.book(YEAR).unwrap().edition.cover_price_cents, None);
 }
+
+#[test]
+fn a_book_is_estimated_at_about_forty_cents_on_opus_until_measured() {
+    let opus = crate::cost::anthropic_price("claude-opus-5-5").unwrap();
+    let estimate = estimate_book(&opus, &Settings::balanced(YEAR));
+    assert!(estimate.likely < estimate.most);
+    assert_eq!(crate::cost::dollars(estimate.likely), "$0.39");
+    assert_eq!(crate::cost::dollars(estimate.most), "$1.02");
+}
+
+#[test]
+fn a_chosen_candidate_replaces_the_series_but_keeps_the_number() {
+    let q = query("X-Men #1");
+    let chosen = choose(
+        &q,
+        &Candidate {
+            series: "X-Men".into(),
+            start_year: Some(1991),
+            volume: Some(2),
+            publisher: "Marvel".into(),
+            why: "the relaunch".into(),
+        },
+    );
+    assert_eq!(chosen.to_string(), "X-Men (1991) Vol. 2 #1");
+    assert_eq!(chosen.line, q.line);
+}

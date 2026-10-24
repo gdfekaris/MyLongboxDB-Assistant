@@ -266,6 +266,14 @@ mod tests {
         }
     }
 
+    /// The queue shares one provider across its threads.
+    #[test]
+    fn both_providers_can_be_shared_across_threads() {
+        fn shareable<T: Sync>() {}
+        shareable::<AnthropicLookup<'static>>();
+        shareable::<OpenRouterLookup<'static>>();
+    }
+
     #[test]
     fn anthropic_stops_become_lookup_failures() {
         assert_eq!(finished(&message(Stop::EndTurn)), Ok(()));

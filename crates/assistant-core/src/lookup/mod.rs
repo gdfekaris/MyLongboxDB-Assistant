@@ -27,7 +27,7 @@ pub use draft::{Candidate, Detail, Draft, Entry, Identity, Source, Value};
 pub use fields::{FIELDS, Field, Kind, check, spec};
 pub use prompts::PROMPT_VERSION;
 
-use crate::cost::Usage;
+use crate::cost::{Estimate, Planned, Price, Usage};
 use crate::lines::BookQuery;
 use crate::model::{Category, Confidence, Role};
 use crate::money::Picodollars;
@@ -69,6 +69,58 @@ impl Settings {
 const RESEARCH_TOKENS: u32 = 16_000;
 const STRUCTURE_TOKENS: u32 = 16_000;
 const CHECK_TOKENS: u32 = 8_000;
+
+/// What each step is expected to use, for the estimate before a run.
+/// These are first guesses, to be replaced with what the live trial
+/// measures: thinking counts as output, and each search's results become
+/// input.
+pub fn planned(settings: &Settings) -> [Planned; 3] {
+    let searches = u64::from(settings.max_searches);
+    [
+        Planned {
+            input_tokens: 2_000,
+            likely_output_tokens: 4_000,
+            most_output_tokens: u64::from(RESEARCH_TOKENS),
+            likely_searches: searches.saturating_sub(1).max(1).min(searches),
+            most_searches: searches,
+            tokens_per_search: 5_000,
+            images: 0,
+        },
+        Planned {
+            input_tokens: 7_000,
+            likely_output_tokens: 4_000,
+            most_output_tokens: u64::from(STRUCTURE_TOKENS),
+            ..Planned::default()
+        },
+        Planned {
+            input_tokens: 7_000,
+            likely_output_tokens: 2_000,
+            most_output_tokens: u64::from(CHECK_TOKENS),
+            ..Planned::default()
+        },
+    ]
+}
+
+/// What one book's lookup should and at most can cost.
+pub fn estimate_book(price: &Price, settings: &Settings) -> Estimate {
+    planned(settings)
+        .iter()
+        .fold(Estimate::default(), |sum, step| {
+            sum.plus(step.estimate(price))
+        })
+}
+
+/// The query for the series the owner picked from an unsettled lookup's
+/// candidates, to look the book up again.
+pub fn choose(query: &BookQuery, candidate: &Candidate) -> BookQuery {
+    BookQuery {
+        line: query.line,
+        series: candidate.series.clone(),
+        start_year: candidate.start_year.or(query.start_year),
+        volume: candidate.volume,
+        number: query.number.clone(),
+    }
+}
 
 /// A request with web search.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -130,7 +182,8 @@ impl Spent {
         }
     }
 
-    fn add(&mut self, other: Self) {
+    /// Both spendings together.
+    pub fn add(&mut self, other: Self) {
         let first = *self == Self::default();
         self.usage = self.usage.plus(other.usage);
         self.cost = Picodollars(self.cost.0.saturating_add(other.cost.0));
