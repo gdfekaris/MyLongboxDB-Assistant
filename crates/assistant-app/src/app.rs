@@ -1,16 +1,27 @@
-//! The window: setting up, unlocking, and the home page, and holding the
-//! unlocked keys under the session's rules.
+//! The window: setting up, unlocking, adding books, and running their
+//! lookups, and holding the unlocked keys under the session's rules.
 
+use std::rc::Rc;
+use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
 use adw::prelude::*;
-use assistant_keys::{ApiKeys, KdfParams, KeyFileError, Passphrase, save, seal};
+use assistant_core::cost::{Estimate, anthropic_price, dollars};
+use assistant_core::lines::BookQuery;
+use assistant_core::lookup::{Settings as LookupSettings, estimate_book};
+use assistant_core::queue::{self, Event, RunOptions, Summary};
+use assistant_keys::{ApiKey, ApiKeys, KdfParams, KeyFileError, Passphrase, save, seal};
 use assistant_net::Client;
+use assistant_net::anthropic::Anthropic;
+use assistant_net::lookup::{AnthropicLookup, OpenRouterLookup};
+use assistant_net::openrouter::{ModelInfo, OpenRouter};
 use gtk::{gio, glib};
 use relm4::{ComponentParts, ComponentSender, SimpleComponent};
 
+use crate::add::AddPage;
 use crate::config::{self, Config, ProviderChoice};
 use crate::i18n::{gettext, gettext_f};
+use crate::run::{Run, RunPage};
 use crate::session::{Session, passphrase_problem};
 use crate::setup::{self, SetupDone};
 use crate::unlock::{UnlockPage, open_key_file};
@@ -38,6 +49,16 @@ pub enum AppMsg {
     PassphraseSaved(Result<(), KeyFileError>),
     Forget,
     Forgotten,
+    Batch(usize),
+    LookUp,
+    Estimated(Option<Estimate>),
+    /// The owner confirmed a run, with the passphrase if the key is saved.
+    Confirmed(Option<Passphrase>),
+    RunKeys(Result<ApiKeys, KeyFileError>),
+    RunEvent(Event),
+    RunDone(Summary),
+    CancelRun,
+    LookUpMore,
 }
 
 impl std::fmt::Debug for AppMsg {
@@ -57,6 +78,15 @@ impl std::fmt::Debug for AppMsg {
             Self::PassphraseSaved(_) => "PassphraseSaved",
             Self::Forget => "Forget",
             Self::Forgotten => "Forgotten",
+            Self::Batch(_) => "Batch",
+            Self::LookUp => "LookUp",
+            Self::Estimated(_) => "Estimated",
+            Self::Confirmed(_) => "Confirmed",
+            Self::RunKeys(_) => "RunKeys",
+            Self::RunEvent(_) => "RunEvent",
+            Self::RunDone(_) => "RunDone",
+            Self::CancelRun => "CancelRun",
+            Self::LookUpMore => "LookUpMore",
         })
     }
 }
@@ -69,7 +99,11 @@ pub struct App {
     stack: gtk::Stack,
     setup_holder: adw::Bin,
     unlock: UnlockPage,
-    home: adw::StatusPage,
+    add: Rc<AddPage>,
+    run_page: RunPage,
+    run: Option<Run>,
+    /// The books waiting for the owner to confirm their run.
+    pending: Vec<BookQuery>,
     toasts: adw::ToastOverlay,
     sender: ComponentSender<Self>,
 }
@@ -95,17 +129,163 @@ impl App {
         self.unlock.entry.grab_focus();
     }
 
-    fn show_home(&self) {
-        let provider = match self.config.provider {
-            Some(ProviderChoice::OpenRouter) => gettext("OpenRouter"),
-            _ => gettext("Anthropic"),
-        };
-        self.home.set_description(Some(&gettext_f(
-            "Looking books up with {model} through {provider}. Adding books comes next.",
-            &[("model", &self.config.model), ("provider", &provider)],
-        )));
-        self.stack.set_visible_child_name("home");
+    /// The page for work: a run while there is one, or adding books.
+    fn show_work(&self) {
+        match &self.run {
+            Some(run) => {
+                self.run_page.show(run);
+                self.stack.set_visible_child_name("run");
+            }
+            None => self.stack.set_visible_child_name("add"),
+        }
         self.setup_holder.set_child(None::<&gtk::Widget>);
+    }
+
+    fn lookup_settings(&self) -> LookupSettings {
+        LookupSettings::balanced(this_year())
+    }
+
+    /// Asks the owner to confirm a run at its estimated cost, and for the
+    /// passphrase when the key is saved.
+    fn confirm_run(&self, estimate: Option<Estimate>) {
+        let count = self.pending.len();
+        let cost = match estimate {
+            Some(e) => gettext_f(
+                "With {model}, this should cost about {likely}, and at most {most}, \
+                 web searches included.",
+                &[
+                    ("model", &self.config.model),
+                    ("likely", &dollars(e.likely)),
+                    ("most", &dollars(e.most)),
+                ],
+            ),
+            None => gettext_f(
+                "The cost with {model} is not known in advance.",
+                &[("model", &self.config.model)],
+            ),
+        };
+        let saved = self.session.is_saved();
+        let body = if saved {
+            gettext_f("{cost} Type your passphrase to start.", &[("cost", &cost)])
+        } else {
+            cost
+        };
+        let dialog = adw::AlertDialog::builder()
+            .heading(if count == 1 {
+                gettext("Look Up 1 Book?")
+            } else {
+                gettext_f("Look Up {count} Books?", &[("count", &count.to_string())])
+            })
+            .body(body)
+            .close_response("cancel")
+            .default_response("go")
+            .build();
+        dialog.add_responses(&[
+            ("cancel", &gettext("_Cancel")),
+            ("go", &gettext("_Look Up")),
+        ]);
+        dialog.set_response_appearance("go", adw::ResponseAppearance::Suggested);
+        let entry = adw::PasswordEntryRow::builder()
+            .title(gettext("Passphrase"))
+            .activates_default(true)
+            .build();
+        if saved {
+            let list = gtk::ListBox::builder()
+                .selection_mode(gtk::SelectionMode::None)
+                .css_classes(["boxed-list"])
+                .build();
+            list.append(&entry);
+            dialog.set_extra_child(Some(&list));
+            dialog.set_property("focus-widget", &entry);
+            dialog.set_response_enabled("go", false);
+            let weak = dialog.downgrade();
+            entry.connect_changed(move |e| {
+                if let Some(dialog) = weak.upgrade() {
+                    dialog.set_response_enabled("go", !e.text().is_empty());
+                }
+            });
+        }
+        let sender = self.sender.clone();
+        dialog.choose(
+            Some(&self.window),
+            None::<&gio::Cancellable>,
+            move |response| {
+                let text = entry.text().to_string();
+                entry.set_text("");
+                if response != "go" {
+                    return;
+                }
+                sender.input(AppMsg::Confirmed(if saved {
+                    Passphrase::new(text)
+                } else {
+                    None
+                }));
+            },
+        );
+    }
+
+    /// Starts looking up the pending books with `keys`, on threads of
+    /// their own; their progress comes back as messages.
+    fn start_run(&mut self, keys: &ApiKeys) {
+        let Some(provider) = self.config.provider else {
+            return;
+        };
+        let key: Option<ApiKey> = match provider {
+            ProviderChoice::Anthropic => keys.anthropic.clone(),
+            ProviderChoice::OpenRouter => keys.openrouter.clone(),
+        };
+        let Some(key) = key else {
+            self.toast(&gettext(
+                "There is no key for this provider; set the app up again.",
+            ));
+            return;
+        };
+        let queries = std::mem::take(&mut self.pending);
+        let run = Run::new(queries.clone());
+        let cancel = run.cancel.clone();
+        self.run = Some(run);
+        self.show_work();
+        let options = RunOptions {
+            batch: self.config.batch,
+            ..RunOptions::new(self.lookup_settings())
+        };
+        let client = self.client.clone();
+        let model = self.config.model.clone();
+        let input = self.sender.input_sender().clone();
+        gio::spawn_blocking(move || {
+            let emit = |event: Event| input.emit(AppMsg::RunEvent(event));
+            let summary = match provider {
+                ProviderChoice::Anthropic => {
+                    let provider = AnthropicLookup {
+                        api: Anthropic::new(&client, &key),
+                        model,
+                    };
+                    queue::run(&provider, &queries, &options, &cancel, &emit)
+                }
+                ProviderChoice::OpenRouter => {
+                    // Prices are not needed: OpenRouter reports what each
+                    // request cost.
+                    let provider = OpenRouterLookup {
+                        api: OpenRouter::new(&client, &key),
+                        model: ModelInfo {
+                            name: model.clone(),
+                            id: model,
+                            image_input: true,
+                            structured_outputs: true,
+                            tools: true,
+                            prompt_price: None,
+                            completion_price: None,
+                            image_price: None,
+                            web_search_price: None,
+                        },
+                    };
+                    queue::run(&provider, &queries, &options, &cancel, &emit)
+                }
+            };
+            if let Ok(summary) = summary {
+                input.emit(AppMsg::RunDone(summary));
+            }
+        });
     }
 
     /// The page the app starts on, or returns to after locking.
@@ -290,20 +470,25 @@ impl SimpleComponent for App {
                 .tooltip_text(gettext("Main Menu"))
                 .build(),
         );
-        let home = adw::StatusPage::builder()
-            .icon_name("system-search-symbolic")
-            .title(gettext("Ready"))
-            .build();
-        let home_page = adw::ToolbarView::new();
-        home_page.add_top_bar(&header);
-        home_page.set_content(Some(&home));
+        let config = Config::load(&config::path());
+        let add = AddPage::new(&header, config.batch, this_year());
+        let run_header = adw::HeaderBar::new();
+        run_header.pack_end(
+            &gtk::MenuButton::builder()
+                .icon_name("open-menu-symbolic")
+                .menu_model(&menu)
+                .tooltip_text(gettext("Main Menu"))
+                .build(),
+        );
+        let run_page = RunPage::new(&run_header);
 
         let stack = gtk::Stack::builder()
             .transition_type(gtk::StackTransitionType::Crossfade)
             .build();
         stack.add_named(&setup_holder, Some("setup"));
         stack.add_named(&unlock.root, Some("unlock"));
-        stack.add_named(&home_page, Some("home"));
+        stack.add_named(&add.root, Some("add"));
+        stack.add_named(&run_page.root, Some("run"));
         let toasts = adw::ToastOverlay::new();
         toasts.set_child(Some(&stack));
         window.set_content(Some(&toasts));
@@ -346,7 +531,31 @@ impl SimpleComponent for App {
                 .connect_clicked(move |_| sender.input(AppMsg::Forget));
         }
 
-        let config = Config::load(&config::path());
+        {
+            let sender = sender.clone();
+            add.look_up
+                .connect_clicked(move |_| sender.input(AppMsg::LookUp));
+        }
+        {
+            let sender = sender.clone();
+            add.batch.connect_value_notify(move |row| {
+                sender.input(AppMsg::Batch(
+                    usize::try_from(row.value() as i64).unwrap_or(1),
+                ));
+            });
+        }
+        {
+            let sender = sender.clone();
+            run_page
+                .cancel
+                .connect_clicked(move |_| sender.input(AppMsg::CancelRun));
+        }
+        {
+            let sender = sender.clone();
+            run_page
+                .again
+                .connect_clicked(move |_| sender.input(AppMsg::LookUpMore));
+        }
         let model = Self {
             session: Session::locked(config::key_file().exists(), Instant::now()),
             config,
@@ -355,7 +564,10 @@ impl SimpleComponent for App {
             stack,
             setup_holder,
             unlock,
-            home,
+            add,
+            run_page,
+            run: None,
+            pending: Vec::new(),
             toasts,
             sender,
         };
@@ -385,6 +597,7 @@ impl SimpleComponent for App {
                 let config = Config {
                     provider: Some(provider),
                     model,
+                    batch: self.config.batch,
                 };
                 match passphrase {
                     Some(passphrase) => {
@@ -411,7 +624,7 @@ impl SimpleComponent for App {
                 self.config = config;
                 let saved = config::key_file().exists();
                 self.session.unlock(keys, saved, Instant::now());
-                self.show_home();
+                self.show_work();
             }
             AppMsg::Saved(Err(e), _) => {
                 self.toast(&gettext_f(
@@ -437,7 +650,7 @@ impl SimpleComponent for App {
                     .provider
                     .is_some_and(|p| self.session.key(p).is_some())
                 {
-                    self.show_home();
+                    self.show_work();
                 } else {
                     self.show_setup();
                 }
@@ -483,6 +696,89 @@ impl SimpleComponent for App {
             }
             AppMsg::PassphraseSaved(Err(e)) => self.toast(&error_text(&e)),
             AppMsg::Forget => self.confirm_forget(),
+            AppMsg::Batch(batch) => {
+                self.config.batch = batch;
+                let _ = self.config.save(&config::path());
+            }
+            AppMsg::LookUp => {
+                let (books, problems) = self.add.parsed(this_year());
+                if books.is_empty() || !problems.is_empty() || books.len() > self.config.batch {
+                    return;
+                }
+                let count = books.len() as u64;
+                self.pending = books;
+                let settings = self.lookup_settings();
+                match self.config.provider {
+                    Some(ProviderChoice::OpenRouter) => {
+                        let Some(key) = self.session.key(ProviderChoice::OpenRouter).cloned()
+                        else {
+                            return;
+                        };
+                        let (client, model) = (self.client.clone(), self.config.model.clone());
+                        let job = gio::spawn_blocking(move || {
+                            OpenRouter::new(&client, &key)
+                                .models(&AtomicBool::new(false))
+                                .ok()
+                                .and_then(|models| models.into_iter().find(|m| m.id == model))
+                                .and_then(|m| m.price())
+                                .map(|price| estimate_book(&price, &settings).times(count))
+                        });
+                        let sender = sender.clone();
+                        glib::spawn_future_local(async move {
+                            sender.input(AppMsg::Estimated(job.await.ok().flatten()));
+                        });
+                    }
+                    _ => {
+                        let estimate = anthropic_price(&self.config.model)
+                            .map(|price| estimate_book(&price, &settings).times(count));
+                        self.confirm_run(estimate);
+                    }
+                }
+            }
+            AppMsg::Estimated(estimate) => self.confirm_run(estimate),
+            AppMsg::Confirmed(Some(passphrase)) => {
+                let sender = sender.clone();
+                open_key_file(config::key_file(), passphrase, move |opened| {
+                    sender.input(AppMsg::RunKeys(opened));
+                });
+            }
+            AppMsg::Confirmed(None) => {
+                if let Some(keys) = self.session.keys().cloned() {
+                    self.start_run(&keys);
+                }
+            }
+            AppMsg::RunKeys(Ok(keys)) => {
+                self.session.unlock(keys.clone(), true, Instant::now());
+                self.start_run(&keys);
+            }
+            AppMsg::RunKeys(Err(e)) => {
+                self.toast(&error_text(&e));
+            }
+            AppMsg::RunEvent(event) => {
+                if let Some(run) = &mut self.run {
+                    run.apply(event);
+                    self.run_page.show(run);
+                }
+            }
+            AppMsg::RunDone(summary) => {
+                if let Some(run) = &mut self.run {
+                    run.finish(&summary);
+                    self.run_page.show(run);
+                }
+            }
+            AppMsg::CancelRun => {
+                if let Some(run) = &self.run {
+                    run.cancel();
+                    self.run_page.show(run);
+                }
+            }
+            AppMsg::LookUpMore => {
+                if self.run.as_ref().is_some_and(|r| r.finished) {
+                    self.run = None;
+                    self.add.clear();
+                    self.show_work();
+                }
+            }
             AppMsg::Forgotten => {
                 let _ = std::fs::remove_file(config::key_file());
                 self.session = Session::locked(false, Instant::now());

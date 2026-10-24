@@ -2,9 +2,11 @@
 
 #![forbid(unsafe_code)]
 
+mod add;
 mod app;
 mod config;
 mod i18n;
+mod run;
 mod session;
 mod setup;
 mod unlock;

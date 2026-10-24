@@ -4,6 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
+use assistant_core::queue::{DEFAULT_BATCH, MAX_BATCH};
 use gtk::glib;
 
 const GROUP: &str = "lookup";
@@ -32,12 +33,24 @@ impl ProviderChoice {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Config {
     /// `None` until the owner has set the app up.
     pub provider: Option<ProviderChoice>,
     /// The model's id at that provider.
     pub model: String,
+    /// The most books a run may hold.
+    pub batch: usize,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            provider: None,
+            model: String::new(),
+            batch: DEFAULT_BATCH,
+        }
+    }
 }
 
 pub fn path() -> PathBuf {
@@ -73,12 +86,22 @@ impl Config {
             && model
                 .bytes()
                 .all(|b| b.is_ascii_alphanumeric() || b"-._/:".contains(&b));
+        let batch = file
+            .integer(GROUP, "batch")
+            .ok()
+            .and_then(|n| usize::try_from(n).ok())
+            .filter(|n| (1..=MAX_BATCH).contains(n))
+            .unwrap_or(DEFAULT_BATCH);
         match provider {
             Some(provider) if model_ok => Self {
                 provider: Some(provider),
                 model,
+                batch,
             },
-            _ => Self::default(),
+            _ => Self {
+                batch,
+                ..Self::default()
+            },
         }
     }
 
@@ -88,6 +111,11 @@ impl Config {
         let _ = file.load_from_file(path, glib::KeyFileFlags::KEEP_COMMENTS);
         file.set_string(GROUP, "provider", self.provider.map_or("", |p| p.key()));
         file.set_string(GROUP, "model", &self.model);
+        file.set_integer(
+            GROUP,
+            "batch",
+            i32::try_from(self.batch).unwrap_or(i32::MAX),
+        );
         if let Some(dir) = path.parent() {
             let _ = std::fs::create_dir_all(dir);
         }
@@ -111,6 +139,7 @@ mod tests {
         let wanted = Config {
             provider: Some(ProviderChoice::OpenRouter),
             model: "anthropic/claude-opus-5.5".into(),
+            batch: 45,
         };
         wanted.save(&path).unwrap();
         assert_eq!(Config::load(&path), wanted);
@@ -131,6 +160,14 @@ mod tests {
             std::fs::write(&path, text).unwrap();
             assert_eq!(Config::load(&path), Config::default(), "{text}");
         }
+        std::fs::write(
+            &path,
+            "[lookup]\nprovider=anthropic\nmodel=claude-opus-5-5\nbatch=500\n",
+        )
+        .unwrap();
+        let loaded = Config::load(&path);
+        assert_eq!(loaded.batch, DEFAULT_BATCH);
+        assert_eq!(loaded.provider, Some(ProviderChoice::Anthropic));
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 }

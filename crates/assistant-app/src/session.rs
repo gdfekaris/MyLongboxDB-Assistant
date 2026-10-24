@@ -62,6 +62,12 @@ impl Session {
         self.keys.is_some()
     }
 
+    /// Whether the keys are in the key file, so the passphrase is asked
+    /// for again before each run.
+    pub fn is_saved(&self) -> bool {
+        self.saved
+    }
+
     /// The owner did something; the idle time starts again.
     pub fn touch(&mut self, now: Instant) {
         self.last_used = now;
@@ -126,6 +132,7 @@ mod tests {
         assert!(session.lock_if_idle(almost + IDLE_LOCK));
         assert!(!session.is_unlocked());
         assert!(session.key(ProviderChoice::Anthropic).is_none());
+        assert!(session.is_saved());
     }
 
     #[test]
