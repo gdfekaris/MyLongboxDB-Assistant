@@ -164,10 +164,14 @@ fn models_are_read_with_exact_prices() {
     assert_eq!(info.completion_price, Some(Picodollars(20_000_000)));
     assert_eq!(info.web_search_price, Some(Picodollars(10_000_000_000)));
     assert_eq!(info.image_price, Some(Picodollars(0)));
+    let price = info.price().unwrap();
+    assert_eq!(price.input, Picodollars(4_000_000));
+    assert_eq!(price.search, Picodollars(10_000_000_000));
     assert!(model_info(&json!({"id": "bad id; rm -rf"})).is_none());
     let text_only = json!({"id": "x/y", "architecture": {"input_modalities": ["text"]}, "supported_parameters": []});
     let info = model_info(&text_only).unwrap();
     assert!(!info.image_input && !info.structured_outputs && info.prompt_price.is_none());
+    assert_eq!(info.price(), None);
 }
 
 #[test]

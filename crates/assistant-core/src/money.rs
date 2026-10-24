@@ -1,6 +1,6 @@
-//! Cover prices in dollars and cents, held as whole cents so no amount is
-//! ever rounded. Read and written as MyLongboxDB reads and writes US
-//! dollar amounts.
+//! Money, always in whole units so no amount is ever rounded: cover
+//! prices in cents, read and written as MyLongboxDB reads and writes US
+//! dollar amounts, and API prices and costs in picodollars.
 
 use std::fmt;
 
@@ -70,6 +70,41 @@ pub fn cents_string(cents: i64) -> String {
     format!("{sign}{}.{:02}", magnitude / 100, magnitude % 100)
 }
 
+/// An amount of US dollars in trillionths (picodollars), exact and in
+/// whole units: per-token prices are fractions of a cent, and money is
+/// never held in floating point.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Picodollars(pub i64);
+
+impl Picodollars {
+    /// Reads a non-negative decimal dollar amount such as `0.000004`
+    /// exactly; `None` if it has more than 12 decimal places, a sign, an
+    /// exponent, or anything else.
+    pub fn parse(text: &str) -> Option<Self> {
+        let text = text.trim();
+        let (whole, frac) = text.split_once('.').unwrap_or((text, ""));
+        let digits = |s: &str| s.bytes().all(|b| b.is_ascii_digit());
+        if whole.is_empty() && frac.is_empty() || !digits(whole) || !digits(frac) {
+            return None;
+        }
+        let frac = frac.trim_end_matches('0');
+        if frac.len() > 12 {
+            return None;
+        }
+        let mut units: i64 = 0;
+        let padded = whole
+            .bytes()
+            .chain(frac.bytes())
+            .chain(std::iter::repeat_n(b'0', 12 - frac.len()));
+        for digit in padded {
+            units = units
+                .checked_mul(10)?
+                .checked_add(i64::from(digit - b'0'))?;
+        }
+        Some(Self(units))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -104,5 +139,19 @@ mod tests {
         }
         assert_eq!(cents_string(75), "0.75");
         assert_eq!(cents_string(1200), "12.00");
+    }
+
+    #[test]
+    fn prices_are_read_exactly() {
+        assert_eq!(Picodollars::parse("0.000004"), Some(Picodollars(4_000_000)));
+        assert_eq!(
+            Picodollars::parse("10"),
+            Some(Picodollars(10_000_000_000_000))
+        );
+        assert_eq!(Picodollars::parse("0.000000000001"), Some(Picodollars(1)));
+        assert_eq!(Picodollars::parse("0.0000000000001"), None);
+        for bad in ["", ".", "-1", "1e-6", "0.1.2", "$1", "NaN"] {
+            assert_eq!(Picodollars::parse(bad), None, "{bad}");
+        }
     }
 }

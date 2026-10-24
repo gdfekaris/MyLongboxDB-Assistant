@@ -12,4 +12,4 @@ pub mod retry;
 pub mod roots;
 
 pub use http::{Client, HOSTS, Host, NetError};
-pub use provider::{Citation, Effort, Part, Picodollars, Schema};
+pub use provider::{Citation, Effort, Part, Schema};

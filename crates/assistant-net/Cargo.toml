@@ -11,6 +11,7 @@ publish.workspace = true
 workspace = true
 
 [dependencies]
+assistant-core = { path = "../assistant-core", version = "0.1.0" }
 assistant-keys = { path = "../assistant-keys", version = "0.1.0" }
 # The one HTTP client. Without its defaults it brings no root store and
 # no crypto provider; the app supplies both.

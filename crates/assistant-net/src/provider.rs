@@ -51,41 +51,6 @@ pub struct Schema {
     pub schema: serde_json::Value,
 }
 
-/// An amount of US dollars in trillionths (picodollars), exact and in
-/// whole units: per-token prices are fractions of a cent, and money is
-/// never held in floating point.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Picodollars(pub i64);
-
-impl Picodollars {
-    /// Reads a non-negative decimal dollar amount such as `0.000004`
-    /// exactly; `None` if it has more than 12 decimal places, a sign, an
-    /// exponent, or anything else.
-    pub fn parse(text: &str) -> Option<Self> {
-        let text = text.trim();
-        let (whole, frac) = text.split_once('.').unwrap_or((text, ""));
-        let digits = |s: &str| s.bytes().all(|b| b.is_ascii_digit());
-        if whole.is_empty() && frac.is_empty() || !digits(whole) || !digits(frac) {
-            return None;
-        }
-        let frac = frac.trim_end_matches('0');
-        if frac.len() > 12 {
-            return None;
-        }
-        let mut units: i64 = 0;
-        let padded = whole
-            .bytes()
-            .chain(frac.bytes())
-            .chain(std::iter::repeat_n(b'0', 12 - frac.len()));
-        for digit in padded {
-            units = units
-                .checked_mul(10)?
-                .checked_add(i64::from(digit - b'0'))?;
-        }
-        Some(Self(units))
-    }
-}
-
 /// Text from a provider, made safe to show: the key taken out wherever it
 /// appears, control characters dropped, and the length capped.
 pub(crate) fn scrubbed(text: &str, key: &str) -> String {
@@ -187,20 +152,6 @@ mod tests {
         assert!(!shown.contains("TESTONLY"));
         assert!(shown.contains("[key]"));
         assert!(!shown.contains('\n'));
-    }
-
-    #[test]
-    fn prices_are_read_exactly() {
-        assert_eq!(Picodollars::parse("0.000004"), Some(Picodollars(4_000_000)));
-        assert_eq!(
-            Picodollars::parse("10"),
-            Some(Picodollars(10_000_000_000_000))
-        );
-        assert_eq!(Picodollars::parse("0.000000000001"), Some(Picodollars(1)));
-        assert_eq!(Picodollars::parse("0.0000000000001"), None);
-        for bad in ["", ".", "-1", "1e-6", "0.1.2", "$1", "NaN"] {
-            assert_eq!(Picodollars::parse(bad), None, "{bad}");
-        }
     }
 
     #[test]

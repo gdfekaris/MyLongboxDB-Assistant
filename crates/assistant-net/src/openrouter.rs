@@ -9,7 +9,10 @@ use serde_json::{Value, json};
 use zeroize::Zeroizing;
 
 use crate::http::{Client, Host, Method, NetError, Request, Response};
-use crate::provider::{Citation, Part, Picodollars, Schema, is_jpeg, parse, status_error};
+use assistant_core::Picodollars;
+use assistant_core::cost::Price;
+
+use crate::provider::{Citation, Part, Schema, is_jpeg, parse, status_error};
 
 /// Pages of the model list read at most.
 const MAX_MODEL_PAGES: usize = 10;
@@ -85,6 +88,36 @@ pub struct ModelInfo {
     pub image_price: Option<Picodollars>,
     /// Per search.
     pub web_search_price: Option<Picodollars>,
+}
+
+impl ModelInfo {
+    /// The model's prices, if OpenRouter lists its token prices. Images
+    /// and searches it lists no price for count as free, which only an
+    /// unusual model would be.
+    pub fn price(&self) -> Option<Price> {
+        Some(Price {
+            input: self.prompt_price?,
+            output: self.completion_price?,
+            cache_read: self.prompt_price?,
+            cache_write: self.prompt_price?,
+            search: self.web_search_price.unwrap_or_default(),
+            image: self.image_price.unwrap_or_default(),
+            long_prompt: None,
+        })
+    }
+}
+
+impl Usage {
+    /// What the request used, for the price table; the images it sent
+    /// are the caller's to add, as OpenRouter does not count them.
+    pub fn counted(&self) -> assistant_core::cost::Usage {
+        assistant_core::cost::Usage {
+            input_tokens: self.prompt_tokens,
+            output_tokens: self.completion_tokens,
+            searches: self.web_searches,
+            ..assistant_core::cost::Usage::default()
+        }
+    }
 }
 
 /// A model id as OpenRouter writes them, such as

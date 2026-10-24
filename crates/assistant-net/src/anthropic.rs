@@ -3,6 +3,7 @@
 
 use std::sync::atomic::AtomicBool;
 
+use assistant_core::cost::Usage;
 use assistant_keys::ApiKey;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -65,16 +66,6 @@ pub enum Stop {
     Other(String),
 }
 
-/// What a request used, as the provider counts it, for the cost.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub struct Usage {
-    pub input_tokens: u64,
-    pub output_tokens: u64,
-    pub cache_creation_input_tokens: u64,
-    pub cache_read_input_tokens: u64,
-    pub web_searches: u64,
-}
-
 /// The model's answer. Its content is kept as sent, so a paused answer
 /// can be sent back exactly.
 #[derive(Clone, Debug, PartialEq)]
@@ -83,6 +74,7 @@ pub struct Message {
     pub model: String,
     pub stop: Stop,
     pub content: Vec<Value>,
+    /// What it used, which Anthropic's price table turns into its cost.
     pub usage: Usage,
 }
 
@@ -140,12 +132,13 @@ impl Message {
             usage: Usage {
                 input_tokens: raw.usage.input_tokens,
                 output_tokens: raw.usage.output_tokens,
-                cache_creation_input_tokens: raw.usage.cache_creation_input_tokens.unwrap_or(0),
-                cache_read_input_tokens: raw.usage.cache_read_input_tokens.unwrap_or(0),
-                web_searches: raw
+                cache_write_tokens: raw.usage.cache_creation_input_tokens.unwrap_or(0),
+                cache_read_tokens: raw.usage.cache_read_input_tokens.unwrap_or(0),
+                searches: raw
                     .usage
                     .server_tool_use
                     .map_or(0, |s| s.web_search_requests),
+                images: 0,
             },
         }
     }

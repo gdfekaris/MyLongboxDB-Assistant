@@ -170,7 +170,7 @@ fn a_searched_answer_gives_its_text_sources_and_cost() {
         Usage {
             input_tokens: 6039,
             output_tokens: 931,
-            web_searches: 2,
+            searches: 2,
             ..Usage::default()
         }
     );
