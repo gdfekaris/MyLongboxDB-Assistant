@@ -93,6 +93,58 @@ pub struct Draft {
 }
 
 impl Draft {
+    /// Sets a field to the owner's own value, checked by its kind. It is
+    /// theirs, so it has no source and is accepted; an empty value clears
+    /// the field.
+    pub fn set_value(&mut self, key: &str, text: &str, this_year: u16) -> Result<(), String> {
+        let field = spec(key).ok_or_else(|| format!("there is no field {key}"))?;
+        let text = check(field.kind, text, this_year)?;
+        let at = match self.values.iter().position(|v| v.key == field.key) {
+            Some(at) => at,
+            None => {
+                self.values.push(Value {
+                    key: field.key,
+                    text: String::new(),
+                    source: None,
+                    confidence: Confidence::Low,
+                    note: String::new(),
+                    accepted: false,
+                });
+                self.values.len() - 1
+            }
+        };
+        let value = &mut self.values[at];
+        if value.text != text {
+            value.accepted = !text.is_empty();
+            value.text = text;
+            value.source = None;
+            value.confidence = Confidence::High;
+            value.note.clear();
+        }
+        Ok(())
+    }
+
+    /// How many values and list entries the owner has not accepted; they
+    /// are left out of the export.
+    pub fn unaccepted(&self) -> usize {
+        let values = self
+            .values
+            .iter()
+            .filter(|v| !v.text.is_empty() && !v.accepted)
+            .count();
+        let entries = [
+            &self.credits,
+            &self.characters,
+            &self.teams,
+            &self.story_arcs,
+        ]
+        .into_iter()
+        .flatten()
+        .filter(|e| !e.accepted)
+        .count();
+        values + entries
+    }
+
     /// A field's value, if the lookup has one for it.
     pub fn value(&self, key: &str) -> Option<&Value> {
         self.values.iter().find(|v| v.key == key)

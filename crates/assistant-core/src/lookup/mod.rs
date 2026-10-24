@@ -32,7 +32,7 @@ use crate::lines::BookQuery;
 use crate::model::{Category, Confidence, Role};
 use crate::money::Picodollars;
 use draft::fits_category;
-use fields::clean;
+pub(crate) use fields::clean;
 use schema::{Action, Checked, FieldAnswer, MAX_LIST, Named, Status, Structured};
 
 /// How hard the model should think.

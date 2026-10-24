@@ -14,6 +14,7 @@ pub mod lookup;
 pub mod model;
 pub mod money;
 pub mod queue;
+pub mod results;
 
 pub use codes::{Barcode, Isbn};
 pub use collects::{CollectsEntry, SeriesRef, format_collects, parse_collects};
