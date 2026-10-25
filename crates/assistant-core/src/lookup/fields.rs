@@ -168,7 +168,7 @@ pub const FIELDS: &[Field] = &[
         "synopsis",
         "Synopsis",
         Kind::LongText,
-        "Two or three sentences in your own words on the main story's premise.",
+        "A line or two in your own words on the main story, as short phrases or sentences each ending with a period, such as: Secret Wars II tie-in. Spider-Man in the black costume vs. the Puma, with the Beyonder. Never a semicolon, and a comma only where grammar needs one, never to join phrases.",
     ),
     judgment(
         "key_issue",
@@ -180,7 +180,7 @@ pub const FIELDS: &[Field] = &[
         "key_reason",
         "Why it is a key",
         Kind::Text,
-        "Why it is a key issue, briefly, if it is one.",
+        "Why it is a key issue, if it is one, as short phrases each ending with a period, writing 1st, 2nd for first and second and giving a character's real name in brackets where the sources do, such as: 1st appearance & origin of the Scorpion (Mac Gargan). 1st appearance of Betty Brant. Never a semicolon, and a comma only where grammar needs one, never to join phrases.",
     ),
     field(
         "cover_price",
@@ -271,8 +271,37 @@ pub(crate) fn house_style(key: &str, text: &str) -> String {
             "archie" | "archie comic publications" => "Archie Comics".into(),
             _ => text.to_owned(),
         },
+        "key_reason" | "synopsis" => full_stops(text),
         _ => text.to_owned(),
     }
+}
+
+/// Prose with semicolons that join phrases turned into full stops, the
+/// next phrase starting with a capital, as the collection writes it.
+fn full_stops(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut capital = false;
+    for part in text.split(';') {
+        let part = part.trim();
+        if part.is_empty() {
+            continue;
+        }
+        if !out.is_empty() {
+            if !out.ends_with(['.', '!', '?']) {
+                out.push('.');
+            }
+            out.push(' ');
+            capital = true;
+        }
+        let mut chars = part.chars();
+        if let (true, Some(first)) = (capital, chars.next()) {
+            out.extend(first.to_uppercase());
+            out.push_str(chars.as_str());
+        } else {
+            out.push_str(part);
+        }
+    }
+    out
 }
 
 /// The field with this key.
@@ -416,6 +445,27 @@ mod tests {
         assert_eq!(house_style("publisher", "Image Comics"), "Image");
         assert_eq!(house_style("publisher", "Fantagraphics"), "Fantagraphics");
         assert_eq!(house_style("story_title", "The End"), "The End");
+        assert_eq!(
+            house_style(
+                "key_reason",
+                "1st appearance of Venom; origin of the symbiote; 1st meeting."
+            ),
+            "1st appearance of Venom. Origin of the symbiote. 1st meeting."
+        );
+        assert_eq!(
+            house_style(
+                "synopsis",
+                "Spider-Man vs. the Lizard;  the Torment arc begins"
+            ),
+            "Spider-Man vs. the Lizard. The Torment arc begins"
+        );
+        assert_eq!(
+            house_style(
+                "key_reason",
+                "1st appearance of Kraven, with Mary Jane mentioned."
+            ),
+            "1st appearance of Kraven, with Mary Jane mentioned."
+        );
     }
 
     #[test]
