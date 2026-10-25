@@ -159,7 +159,7 @@ authors.
   try to break it. Kernels before Landlock ABI 4 cannot limit TCP; with
   `ASSISTANT_REQUIRE_LANDLOCK_NET=1` set, the test fails on such a
   kernel instead of skipping that part. While the app runs,
-  `grep Seccomp_filters /proc/$(pgrep -n -f /app/bin/mylongboxdb-assistant)/status`
+  `grep Seccomp_filters /proc/$(pgrep -n -f '^mylongboxdb-assistant')/status`
   shows 2: Flatpak's own filter and the app's.
 - **Photos carry nothing but their pixels.** Every photo you pick is
   checked against MyLongboxDB's limits (50 MB, 100 megapixels, 40,000
@@ -168,8 +168,8 @@ authors.
   reaches the provider or the export. Verify with
   `cargo test -p assistant-media`, whose tests hide marked text in each
   kind of metadata and check that none of it survives, and by running
-  `exiftool` on a photo in an export, which shows no camera or
-  location.
+  `exiftool` or ImageMagick's `identify -verbose` on a photo in an
+  export, which shows no camera or location.
 - **Photos are decoded on a locked-down thread.** The JPEG, PNG, WebP,
   and HEIC decoders run on a thread that can open no file, make or use
   no socket, write only to standard output and error, and start no
@@ -177,7 +177,10 @@ authors.
   saved itself are read back only as JPEGs of its own naming and size.
   Verify with `cargo test -p assistant-sandbox --test confine` and
   `cargo test -p assistant-media`, which decodes each format on such a
-  thread (HEIC with `--features heic`, in the GNOME SDK).
+  thread. HEIC needs libheif with an HEVC decoder, which the Flatpak
+  build adds, so its tests run inside the GNOME SDK after a Flatpak
+  build, with `LD_LIBRARY_PATH=$PWD/_build/files/lib` set and
+  `cargo test -p assistant-media --features heic -- --include-ignored`.
 - **What the model says is not trusted.** Each answer must match a
   strict schema, which refuses unknown fields, wrong types, and
   oversized lists. A value is kept only if it cites a page the
