@@ -374,6 +374,10 @@ pub(crate) fn request_body(request: &MessageRequest) -> Result<Value, NetError> 
             "type": WEB_SEARCH_TOOL,
             "name": "web_search",
             "max_uses": search.max_uses,
+            // This version otherwise runs searches from code execution,
+            // whose filtered results the answer cannot cite, and the
+            // lookup uses only what is cited.
+            "allowed_callers": ["direct"],
         });
         if !search.allowed_domains.is_empty() {
             tool["allowed_domains"] = json!(search.allowed_domains);

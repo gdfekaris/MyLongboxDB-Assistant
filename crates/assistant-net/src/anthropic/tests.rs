@@ -64,7 +64,13 @@ fn web_search_is_the_server_tool_with_its_limits() {
     let body = request_body(&search).unwrap();
     assert_eq!(
         body["tools"],
-        json!([{"type": "web_search_20260209", "name": "web_search", "max_uses": 5, "allowed_domains": ["comics.org"]}])
+        json!([{
+            "type": "web_search_20260209",
+            "name": "web_search",
+            "max_uses": 5,
+            "allowed_callers": ["direct"],
+            "allowed_domains": ["comics.org"],
+        }])
     );
     assert_eq!(body["output_config"], json!({"effort": "high"}));
 }
