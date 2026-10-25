@@ -977,6 +977,7 @@ fn look_up_from(
     annual_series(&mut draft);
     year_only_date(&mut draft);
     titled_year(&mut draft);
+    judgments(&mut draft);
     Ok(draft)
 }
 
@@ -992,6 +993,54 @@ fn year_only_date(draft: &mut Draft) {
         value.accepted = false;
         if value.note.is_empty() {
             value.note = "only the year was found: add the month if the book gives one".into();
+        }
+    }
+}
+
+/// What the collection records by judgment waits for the owner: a role
+/// the sources credit to several people, where the collection keeps the
+/// main one, and the characters, of whom it keeps the notable ones. A
+/// book numbered as a preview or promotion, such as 1/2 or 0, waits for
+/// the owner's word on its series and start year too, which the sources
+/// often place differently.
+fn judgments(draft: &mut Draft) {
+    let roles: Vec<Role> = draft
+        .credits
+        .iter()
+        .filter_map(|c| match c.detail {
+            Detail::Role(role) => Some(role),
+            _ => None,
+        })
+        .collect();
+    for credit in &mut draft.credits {
+        let Detail::Role(role) = credit.detail else {
+            continue;
+        };
+        if roles.iter().filter(|r| **r == role).count() > 1 {
+            credit.accepted = false;
+            if credit.note.is_empty() {
+                credit.note = "one of several in this role: keep the main credit".into();
+            }
+        }
+    }
+    for character in &mut draft.characters {
+        character.accepted = false;
+        if character.note.is_empty() {
+            character.note = "keep the characters the issue is known for".into();
+        }
+    }
+    let number = draft.query.number.as_str();
+    if number.contains(['/', '½']) || number == "0" {
+        for value in draft
+            .values
+            .iter_mut()
+            .filter(|v| matches!(v.key, "series" | "start_year") && !v.text.is_empty())
+        {
+            value.accepted = false;
+            if value.note.is_empty() {
+                value.note =
+                    "a preview or promotional issue: check where your collection files it".into();
+            }
         }
     }
 }

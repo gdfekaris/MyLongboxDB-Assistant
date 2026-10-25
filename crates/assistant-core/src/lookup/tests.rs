@@ -365,9 +365,12 @@ fn the_book_holds_only_what_the_owner_accepted() {
     assert_eq!(book.issue.title, "");
     assert!(!book.issue.is_key);
     assert_eq!(book.issue.credits.len(), 2);
-    assert!(book.issue.characters[0].first);
+    // Characters wait for the owner, who keeps the notable ones.
+    assert!(book.issue.characters.is_empty());
     assert!(book.problems().is_empty());
-    // The owner accepts the key issue and edits the title.
+    // The owner accepts the key issue and a character, and edits the
+    // title.
+    draft.characters[0].accepted = true;
     for value in &mut draft.values {
         match value.key {
             "key_issue" => value.accepted = true,
@@ -382,6 +385,47 @@ fn the_book_holds_only_what_the_owner_accepted() {
     assert!(book.issue.is_key);
     assert_eq!(book.issue.key_reason, "");
     assert_eq!(book.issue.title, "The Robot Who Read Comics");
+    assert!(book.issue.characters[0].first);
+}
+
+#[test]
+fn a_role_credited_to_several_waits_for_the_owner() {
+    let mut answer = full_answer();
+    answer["credits"] = json!([
+        {"name": "Ada Sprocket", "role": "writer", "source": 1, "confidence": "high"},
+        {"name": "Jim Mooney", "role": "inker", "source": 1, "confidence": "high"},
+        {"name": "Vince Colletta", "role": "inker", "source": 2, "confidence": "high"},
+    ]);
+    let provider = Scripted::new(vec![researched(2), answered(answer), no_problems()]);
+    let draft = run(&provider, "ART (1954) #1").0.unwrap();
+    let accepted: Vec<(&str, bool)> = draft
+        .credits
+        .iter()
+        .map(|c| (c.name.as_str(), c.accepted))
+        .collect();
+    assert_eq!(
+        accepted,
+        [
+            ("Ada Sprocket", true),
+            ("Jim Mooney", false),
+            ("Vince Colletta", false)
+        ]
+    );
+    assert!(draft.credits[1].note.contains("main credit"));
+}
+
+#[test]
+fn a_preview_issue_s_series_waits_for_the_owner() {
+    let provider = Scripted::new(vec![researched(2), answered(full_answer()), no_problems()]);
+    let draft = run(&provider, "ART (1954) #1/2").0.unwrap();
+    for key in ["series", "start_year"] {
+        let value = draft.value(key).unwrap();
+        assert!(!value.accepted, "{key}");
+        assert!(value.note.contains("preview"), "{key}");
+    }
+    let provider = Scripted::new(vec![researched(2), answered(full_answer()), no_problems()]);
+    let draft = run(&provider, "ART (1954) #1").0.unwrap();
+    assert!(draft.value("series").unwrap().accepted);
 }
 
 #[test]
