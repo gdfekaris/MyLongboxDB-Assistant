@@ -7,9 +7,8 @@ use std::time::Instant;
 
 use adw::prelude::*;
 use assistant_core::cost::{Estimate, anthropic_price, dollars};
-use assistant_core::lines::BookQuery;
-use assistant_core::lookup::{Draft, Settings as LookupSettings, estimate_book};
-use assistant_core::queue::{self, Event, RunOptions, Summary};
+use assistant_core::lookup::{Draft, Settings as LookupSettings};
+use assistant_core::queue::{self, Event, Item, RunOptions, Summary};
 use assistant_core::results::{self, ReviewBook};
 use assistant_core::write_export;
 use assistant_keys::{ApiKey, ApiKeys, KdfParams, KeyFileError, Passphrase, save, seal};
@@ -24,7 +23,7 @@ use crate::add::AddPage;
 use crate::config::{self, Config, ProviderChoice};
 use crate::i18n::{gettext, gettext_f};
 use crate::review::{List, ReviewMsg, ReviewPage};
-use crate::run::{Run, RunPage, Status};
+use crate::run::{Book, Run, RunPage, Status};
 use crate::session::{Session, passphrase_problem};
 use crate::setup::{self, SetupDone};
 use crate::unlock::{UnlockPage, open_key_file};
@@ -152,7 +151,7 @@ pub struct App {
     /// The result a pending lookup of a picked candidate replaces.
     replacing: Option<usize>,
     /// The books waiting for the owner to confirm their run.
-    pending: Vec<BookQuery>,
+    pending: Vec<Book>,
     toasts: adw::ToastOverlay,
     sender: ComponentSender<Self>,
 }
@@ -196,8 +195,13 @@ impl App {
 
     /// Works out the pending books' cost, then asks the owner to confirm.
     fn ask_to_run(&self) {
-        let count = self.pending.len() as u64;
         let settings = self.lookup_settings();
+        let books = self.pending.clone();
+        let estimate = move |price: &assistant_core::cost::Price| {
+            books.iter().fold(Estimate::default(), |sum, b| {
+                sum.plus(b.estimate(price, &settings))
+            })
+        };
         match self.config.provider {
             Some(ProviderChoice::OpenRouter) => {
                 let Some(key) = self.session.key(ProviderChoice::OpenRouter).cloned() else {
@@ -210,7 +214,7 @@ impl App {
                         .ok()
                         .and_then(|models| models.into_iter().find(|m| m.id == model))
                         .and_then(|m| m.price())
-                        .map(|price| estimate_book(&price, &settings).times(count))
+                        .map(|price| estimate(&price))
                 });
                 let sender = self.sender.clone();
                 glib::spawn_future_local(async move {
@@ -218,8 +222,7 @@ impl App {
                 });
             }
             _ => {
-                let estimate = anthropic_price(&self.config.model)
-                    .map(|price| estimate_book(&price, &settings).times(count));
+                let estimate = anthropic_price(&self.config.model).map(|price| estimate(&price));
                 self.confirm_run(estimate);
             }
         }
@@ -347,14 +350,29 @@ impl App {
             ReviewMsg::Edit(i, key) => self.edit_value(i, key, None),
             ReviewMsg::Discard(i) => self.confirm_discard(i),
             ReviewMsg::Choose(i, n) => {
-                let query = self.results.get(i).and_then(|b| match &b.draft.identity {
-                    assistant_core::lookup::Identity::Ambiguous(candidates) => candidates
-                        .get(n)
-                        .map(|c| assistant_core::lookup::choose(&b.draft.query, c)),
+                let chosen = self.results.get(i).and_then(|b| match &b.draft.identity {
+                    assistant_core::lookup::Identity::Ambiguous(candidates) => {
+                        candidates.get(n).map(|c| {
+                            let query = assistant_core::lookup::choose(&b.draft.query, c);
+                            // A book from photos is looked up from them
+                            // again, so their reading and its edition come
+                            // along.
+                            match &b.front {
+                                Some(front) => Book::photos(
+                                    query.to_string(),
+                                    front.clone(),
+                                    b.back.clone(),
+                                    Vec::new(),
+                                    Some(query),
+                                ),
+                                None => Book::line(query),
+                            }
+                        })
+                    }
                     _ => None,
                 });
-                if let Some(query) = query {
-                    self.pending = vec![query];
+                if let Some(book) = chosen {
+                    self.pending = vec![book];
                     self.replacing = Some(i);
                     self.ask_to_run();
                 }
@@ -556,8 +574,9 @@ impl App {
             ));
             return;
         };
-        let queries = std::mem::take(&mut self.pending);
-        let mut run = Run::new(queries.clone());
+        let books = std::mem::take(&mut self.pending);
+        let queries: Vec<Item> = books.iter().map(|b| b.item.clone()).collect();
+        let mut run = Run::new(books);
         run.replaces = self.replacing.take();
         let cancel = run.cancel.clone();
         self.run = Some(run);
@@ -1082,7 +1101,7 @@ impl SimpleComponent for App {
                 if books.is_empty() || !problems.is_empty() || books.len() > self.config.batch {
                     return;
                 }
-                self.pending = books;
+                self.pending = books.into_iter().map(Book::line).collect();
                 self.replacing = None;
                 self.ask_to_run();
             }
@@ -1116,20 +1135,29 @@ impl SimpleComponent for App {
                     let found = run
                         .status
                         .iter()
-                        .filter_map(|s| match s {
-                            Status::Done(draft) => Some(draft.as_ref().clone()),
+                        .zip(&run.books)
+                        .filter_map(|(s, book)| match s {
+                            Status::Done(draft) => {
+                                let draft = draft.as_ref().clone();
+                                Some(match &book.photos {
+                                    Some((front, back)) => {
+                                        ReviewBook::with_photos(draft, front.clone(), back.clone())
+                                    }
+                                    None => ReviewBook::new(draft),
+                                })
+                            }
                             _ => None,
                         })
                         .collect::<Vec<_>>();
                     (found, run.replaces)
                 });
-                for draft in found {
-                    if self.results.iter().any(|b| b.draft == draft) {
+                for book in found {
+                    if self.results.iter().any(|b| b.draft == book.draft) {
                         continue;
                     }
                     match replaces.filter(|i| *i < self.results.len()) {
-                        Some(i) => self.results[i] = ReviewBook::new(draft),
-                        None => self.results.push(ReviewBook::new(draft)),
+                        Some(i) => self.results[i] = book,
+                        None => self.results.push(book),
                     }
                     self.save_results();
                 }

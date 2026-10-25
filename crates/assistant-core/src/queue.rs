@@ -6,7 +6,9 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::lines::BookQuery;
-use crate::lookup::{Draft, LookupError, Provider, Settings, Spent, look_up};
+use crate::lookup::{
+    Covers, Draft, LookupError, Provider, Settings, Spent, look_up, look_up_covers,
+};
 use crate::money::Picodollars;
 
 /// Books in a run unless the owner sets otherwise.
@@ -17,6 +19,13 @@ pub const MAX_BATCH: usize = 100;
 /// at a time.
 pub const DEFAULT_WORKERS: usize = 3;
 const MAX_WORKERS: usize = 6;
+
+/// One book to look up: a line the owner typed, or their cover photos.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Item {
+    Line(BookQuery),
+    Covers(Covers),
+}
 
 /// How a run goes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -94,20 +103,20 @@ struct Shared {
     set_aside: i64,
 }
 
-/// Looks up `queries` and reports each book's progress through `event`,
+/// Looks up `items` and reports each book's progress through `event`,
 /// from whichever thread looked it up. Returns once every book has
 /// finished or been skipped.
 pub fn run(
     provider: &(dyn Provider + Sync),
-    queries: &[BookQuery],
+    items: &[Item],
     options: &RunOptions,
     cancel: &AtomicBool,
     event: &(dyn Fn(Event) + Sync),
 ) -> Result<Summary, RunError> {
     let batch = options.batch.clamp(1, MAX_BATCH);
-    if queries.len() > batch {
+    if items.len() > batch {
         return Err(RunError::TooManyBooks {
-            books: queries.len(),
+            books: items.len(),
             batch,
         });
     }
@@ -115,14 +124,14 @@ pub fn run(
     let workers = options
         .workers
         .clamp(1, MAX_WORKERS)
-        .min(queries.len().max(1));
+        .min(items.len().max(1));
     std::thread::scope(|scope| {
         for _ in 0..workers {
             scope.spawn(|| {
                 loop {
                     let (index, start) = {
                         let mut s = shared.lock().unwrap_or_else(|e| e.into_inner());
-                        let Some(index) = (s.next < queries.len()).then_some(s.next) else {
+                        let Some(index) = (s.next < items.len()).then_some(s.next) else {
                             break;
                         };
                         s.next += 1;
@@ -151,13 +160,14 @@ pub fn run(
                     }
                     event(Event::Started(index));
                     let mut spent = Spent::default();
-                    let result = look_up(
-                        provider,
-                        &queries[index],
-                        &options.settings,
-                        cancel,
-                        &mut spent,
-                    );
+                    let result = match &items[index] {
+                        Item::Line(query) => {
+                            look_up(provider, query, &options.settings, cancel, &mut spent)
+                        }
+                        Item::Covers(covers) => {
+                            look_up_covers(provider, covers, &options.settings, cancel, &mut spent)
+                        }
+                    };
                     {
                         let mut s = shared.lock().unwrap_or_else(|e| e.into_inner());
                         s.set_aside = s
@@ -241,13 +251,17 @@ mod tests {
         }
     }
 
-    fn books(n: usize) -> Vec<BookQuery> {
-        parse_lines(&format!("Robot Tales 1-{n}"), YEAR).0
+    fn books(n: usize) -> Vec<Item> {
+        parse_lines(&format!("Robot Tales 1-{n}"), YEAR)
+            .0
+            .into_iter()
+            .map(Item::Line)
+            .collect()
     }
 
     fn collect(
         provider: &Slow,
-        queries: &[BookQuery],
+        queries: &[Item],
         options: &RunOptions,
         cancel: &AtomicBool,
     ) -> (Result<Summary, RunError>, Vec<String>) {
@@ -280,6 +294,27 @@ mod tests {
         }
         let most = provider.most_at_once.load(Ordering::SeqCst);
         assert!((2..=DEFAULT_WORKERS).contains(&most), "{most} at once");
+    }
+
+    #[test]
+    fn photos_and_lines_go_in_one_run() {
+        let provider = Slow::default();
+        let options = RunOptions::new(Settings::balanced(YEAR));
+        let jpeg = crate::model::Jpeg::new(vec![0xFF, 0xD8, 0xFF, 0]).unwrap();
+        let mut items = books(1);
+        items.push(Item::Covers(Covers {
+            line: 2,
+            front: jpeg,
+            back: None,
+            chosen: None,
+        }));
+        let (summary, log) = collect(&provider, &items, &options, &AtomicBool::new(false));
+        let summary = summary.unwrap();
+        // The line was searched; the photos went to the read step, which
+        // this provider fails.
+        assert!(log.contains(&"finished 0 true".to_owned()));
+        assert!(log.contains(&"finished 1 false".to_owned()));
+        assert_eq!((summary.finished, summary.failed), (1, 1));
     }
 
     #[test]

@@ -5,10 +5,14 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use adw::prelude::*;
+use assistant_core::cost::{Estimate, Price};
 use assistant_core::dollars;
 use assistant_core::lines::BookQuery;
-use assistant_core::lookup::{Draft, Identity, LookupError, Spent};
-use assistant_core::queue::{Event, Summary};
+use assistant_core::lookup::{
+    Covers, Draft, Identity, LookupError, Settings, Spent, estimate_book, estimate_photo_book,
+};
+use assistant_core::queue::{Event, Item, Summary};
+use assistant_core::results::Photo;
 
 use crate::i18n::{gettext, gettext_f};
 
@@ -21,9 +25,73 @@ pub enum Status {
     Skipped,
 }
 
+/// The size the app keeps photos at, for estimating a photo whose size
+/// is not known.
+const KEPT_PHOTO: (u32, u32) = (1067, 1600);
+
+/// One book waiting to be looked up, with what its result keeps.
+#[derive(Clone, Debug)]
+pub struct Book {
+    pub item: Item,
+    /// How the run page names it.
+    pub label: String,
+    /// The owner's photos, kept with the result; the item's covers are
+    /// these photos.
+    pub photos: Option<(Photo, Option<Photo>)>,
+    /// Each photo's size in pixels, for the estimate.
+    pub sizes: Vec<(u32, u32)>,
+}
+
+impl Book {
+    pub fn line(query: BookQuery) -> Self {
+        Self {
+            label: query.to_string(),
+            item: Item::Line(query),
+            photos: None,
+            sizes: Vec::new(),
+        }
+    }
+
+    /// A book to look up from its photos, as the series the owner chose
+    /// from an earlier lookup's candidates if they did.
+    pub fn photos(
+        label: String,
+        front: Photo,
+        back: Option<Photo>,
+        sizes: Vec<(u32, u32)>,
+        chosen: Option<BookQuery>,
+    ) -> Self {
+        let covers = Covers {
+            line: chosen.as_ref().map_or(1, |q| q.line),
+            front: front.jpeg.clone(),
+            back: back.as_ref().map(|p| p.jpeg.clone()),
+            chosen,
+        };
+        Self {
+            label,
+            item: Item::Covers(covers),
+            photos: Some((front, back)),
+            sizes,
+        }
+    }
+
+    /// What looking it up should and at most can cost.
+    pub fn estimate(&self, price: &Price, settings: &Settings) -> Estimate {
+        match &self.item {
+            Item::Line(_) => estimate_book(price, settings),
+            Item::Covers(covers) => {
+                let mut sizes = self.sizes.clone();
+                let photos = 1 + usize::from(covers.back.is_some());
+                sizes.resize(photos, KEPT_PHOTO);
+                estimate_photo_book(price, settings, &sizes)
+            }
+        }
+    }
+}
+
 /// A run under way or finished, and what it found.
 pub struct Run {
-    pub queries: Vec<BookQuery>,
+    pub books: Vec<Book>,
     pub status: Vec<Status>,
     pub spent: Spent,
     pub cancel: Arc<AtomicBool>,
@@ -34,10 +102,10 @@ pub struct Run {
 }
 
 impl Run {
-    pub fn new(queries: Vec<BookQuery>) -> Self {
-        let status = queries.iter().map(|_| Status::Waiting).collect();
+    pub fn new(books: Vec<Book>) -> Self {
+        let status = books.iter().map(|_| Status::Waiting).collect();
         Self {
-            queries,
+            books,
             status,
             spent: Spent::default(),
             cancel: Arc::new(AtomicBool::new(false)),
@@ -85,8 +153,8 @@ impl Run {
     }
 
     /// The books that failed or were not looked up, to try again.
-    pub fn unfinished(&self) -> Vec<BookQuery> {
-        self.queries
+    pub fn unfinished(&self) -> Vec<Book> {
+        self.books
             .iter()
             .zip(&self.status)
             .filter(|(_, s)| matches!(s, Status::Failed(_) | Status::Skipped))
@@ -228,9 +296,9 @@ impl RunPage {
         while let Some(row) = self.list.first_child() {
             self.list.remove(&row);
         }
-        for (query, status) in run.queries.iter().zip(&run.status) {
+        for (book, status) in run.books.iter().zip(&run.status) {
             let row = adw::ActionRow::builder()
-                .title(query.to_string())
+                .title(&book.label)
                 .subtitle(describe(status))
                 .title_lines(1)
                 .build();
@@ -265,7 +333,7 @@ impl RunPage {
                 "{done} of {total} books done. Spent {cost} so far.",
                 &[
                     ("done", &done.to_string()),
-                    ("total", &run.queries.len().to_string()),
+                    ("total", &run.books.len().to_string()),
                     ("cost", &cost),
                 ],
             )

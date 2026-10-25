@@ -604,6 +604,9 @@ pub struct Covers {
     pub line: usize,
     pub front: Jpeg,
     pub back: Option<Jpeg>,
+    /// The series the owner picked from an earlier lookup's candidates,
+    /// looked up in place of the book the cover's title names.
+    pub chosen: Option<BookQuery>,
 }
 
 /// Looks one book up from its cover photos: reads them, then looks up
@@ -638,9 +641,12 @@ pub fn look_up_covers(
         spent,
     )?;
     let reading = Reading::parse(&json).map_err(|why| LookupError::Unreadable(clean(&why, 300)))?;
-    let query = reading
-        .query(covers.line)
-        .map_err(LookupError::NoBookOnCover)?;
+    let query = match &covers.chosen {
+        Some(chosen) => chosen.clone(),
+        None => reading
+            .query(covers.line)
+            .map_err(LookupError::NoBookOnCover)?,
+    };
     if cancel.load(Ordering::Relaxed) {
         return Err(LookupError::Failed(Failure::Cancelled));
     }

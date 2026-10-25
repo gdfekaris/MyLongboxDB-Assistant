@@ -170,6 +170,93 @@ fn the_file_is_private_and_goes_once_nothing_is_left() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+fn jpeg(b: u8) -> Jpeg {
+    Jpeg::new(vec![0xFF, 0xD8, 0xFF, b]).unwrap()
+}
+
+#[test]
+fn photos_are_kept_beside_the_results_and_go_with_their_book() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let dir = folder("photos");
+    let path = dir.join("results.json");
+    let photos = dir.join("results.photos");
+    let mut kept = books();
+    kept.push(ReviewBook::with_photos(
+        draft(),
+        Photo::new(jpeg(1)),
+        Some(Photo::new(jpeg(2))),
+    ));
+    save(&path, &kept).unwrap();
+    let files = || {
+        let mut names: Vec<_> = std::fs::read_dir(&photos)
+            .unwrap()
+            .map(|e| e.unwrap().path())
+            .collect();
+        names.sort();
+        names
+    };
+    assert_eq!(files().len(), 2);
+    for file in files() {
+        let mode = std::fs::metadata(&file).unwrap().permissions().mode();
+        assert_eq!(mode & 0o777, 0o600);
+    }
+    let read = load(&path, YEAR).unwrap();
+    assert_eq!(read, kept);
+    assert_eq!(read.last().unwrap().back.as_ref().unwrap().jpeg, jpeg(2));
+
+    // A book that goes takes its photos with it.
+    kept.pop();
+    save(&path, &kept).unwrap();
+    assert!(!photos.exists());
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_photo_name_cannot_reach_outside_its_folder() {
+    let dir = folder("photo-names");
+    let path = dir.join("results.json");
+    let book = ReviewBook::with_photos(draft(), Photo::new(jpeg(1)), None);
+    save(&path, &[book]).unwrap();
+    std::fs::write(dir.join("secret.jpg"), [0xFF, 0xD8, 0xFF, 9]).unwrap();
+    let text = std::fs::read_to_string(&path).unwrap();
+    let mut file: Json = serde_json::from_str(&text).unwrap();
+    for name in ["../secret", "SECRET", "0123"] {
+        file["books"][0]["front"] = json!(name);
+        std::fs::write(&path, file.to_string()).unwrap();
+        let read = load(&path, YEAR).unwrap();
+        // The book is kept; the photo it names is not read.
+        assert_eq!(read.len(), 1);
+        assert_eq!(read[0].front, None, "{name}");
+    }
+    // A missing photo, or one that is not a JPEG, is left out too.
+    let book = ReviewBook::with_photos(draft(), Photo::new(jpeg(1)), None);
+    save(&path, std::slice::from_ref(&book)).unwrap();
+    let photos = dir.join("results.photos");
+    let only = std::fs::read_dir(&photos)
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    std::fs::write(&only, b"GIF89a").unwrap();
+    assert_eq!(load(&path, YEAR).unwrap()[0].front, None);
+    std::fs::remove_file(&only).unwrap();
+    assert_eq!(load(&path, YEAR).unwrap()[0].front, None);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn results_from_before_photos_were_kept_still_read() {
+    let mut file: Json = serde_json::from_str(&to_json(&books())).unwrap();
+    for b in file["books"].as_array_mut().unwrap() {
+        let b = b.as_object_mut().unwrap();
+        b.remove("front");
+        b.remove("back");
+    }
+    assert_eq!(from_json(&file.to_string(), YEAR).unwrap(), books());
+}
+
 #[test]
 fn the_owner_s_own_values_are_checked_and_accepted() {
     let mut d = draft();

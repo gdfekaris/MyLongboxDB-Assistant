@@ -461,6 +461,7 @@ fn covers(back: bool) -> Covers {
         line: 4,
         front: jpeg(1),
         back: back.then(|| jpeg(2)),
+        chosen: None,
     }
 }
 
@@ -598,6 +599,31 @@ fn photo_books_follow_the_owner_s_conventions() {
         book.edition.cover_artists,
         ["Takashi Okazaki", "Ada Sprocket"]
     );
+}
+
+#[test]
+fn a_series_the_owner_chose_is_looked_up_with_the_covers() {
+    let provider = Scripted::new(vec![
+        answered(robot_cover()),
+        researched(2),
+        answered(photo_structured(&[])),
+        no_problems(),
+    ]);
+    let mut covers = covers(false);
+    covers.chosen = Some(query("Robot Tales (1960) #1"));
+    let draft = look_up_covers(
+        &provider,
+        &covers,
+        &Settings::balanced(YEAR),
+        &AtomicBool::new(false),
+        &mut Spent::default(),
+    )
+    .unwrap();
+    assert_eq!(draft.query.series, "Robot Tales");
+    assert_eq!(draft.query.start_year, Some(1960));
+    // The cover is still read, and its items are still sources.
+    assert_eq!(provider.answers_asked.borrow()[0].name, "cover");
+    assert!(draft.sources.iter().any(|s| s.url == COVER_PHOTO));
 }
 
 #[test]

@@ -3,7 +3,8 @@
 //! included, as JSON, never a key. It is read back as strictly as a
 //! model's answer: every value is checked again by its field's rules, so
 //! a damaged or altered file cannot put into an export what a lookup
-//! could not.
+//! could not. The owner's photos of each book are kept beside it, one
+//! JPEG a file, each written once.
 
 use std::io::{Read, Write};
 use std::path::Path;
@@ -13,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::issue_number::IssueNumber;
 use crate::lines::BookQuery;
 use crate::lookup::{Candidate, Detail, Draft, Entry, Identity, Source, Value, check, spec};
-use crate::model::{Confidence, Role};
+use crate::model::{Confidence, Jpeg, Role};
 
 /// The format written; a file of another one is not read.
 const VERSION: u32 = 1;
@@ -23,19 +24,56 @@ const MAX_FILE_BYTES: u64 = 50 * 1024 * 1024;
 const MAX_BOOKS: usize = 10_000;
 /// The longest text kept in any one place.
 const MAX_TEXT: usize = 20_000;
+/// A kept photo larger than this is not read. The app keeps them at
+/// 1,600 pixels a side, far smaller.
+const MAX_PHOTO_BYTES: u64 = 16 * 1024 * 1024;
 
-/// A looked-up book and whether the owner includes it in the export.
+/// One of the owner's photos of a book, under the name it is kept by.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Photo {
+    name: String,
+    pub jpeg: Jpeg,
+}
+
+impl Photo {
+    /// A photo not yet kept, given a name of its own.
+    pub fn new(jpeg: Jpeg) -> Self {
+        Self {
+            name: uuid::Uuid::new_v4().simple().to_string(),
+            jpeg,
+        }
+    }
+}
+
+/// A looked-up book, the owner's photos of it, and whether the owner
+/// includes it in the export.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ReviewBook {
     pub draft: Draft,
     pub included: bool,
+    pub front: Option<Photo>,
+    pub back: Option<Photo>,
 }
 
 impl ReviewBook {
     /// A new result: included if the lookup identified the issue.
     pub fn new(draft: Draft) -> Self {
         let included = draft.identity == Identity::Identified;
-        Self { draft, included }
+        Self {
+            draft,
+            included,
+            front: None,
+            back: None,
+        }
+    }
+
+    /// A new result looked up from these photos.
+    pub fn with_photos(draft: Draft, front: Photo, back: Option<Photo>) -> Self {
+        Self {
+            front: Some(front),
+            back,
+            ..Self::new(draft)
+        }
     }
 }
 
@@ -50,6 +88,12 @@ struct File {
 #[serde(deny_unknown_fields)]
 struct Saved {
     included: bool,
+    /// The names the book's photos are kept by; files from before photos
+    /// were kept have none.
+    #[serde(default)]
+    front: Option<String>,
+    #[serde(default)]
+    back: Option<String>,
     line: usize,
     series: String,
     start_year: Option<u16>,
@@ -158,6 +202,8 @@ pub fn to_json(books: &[ReviewBook]) -> String {
             };
             Saved {
                 included: b.included,
+                front: b.front.as_ref().map(|p| p.name.clone()),
+                back: b.back.as_ref().map(|p| p.name.clone()),
                 line: d.query.line,
                 series: d.query.series.clone(),
                 start_year: d.query.start_year,
@@ -237,7 +283,7 @@ fn entries(
         .collect()
 }
 
-fn book(saved: Saved, this_year: u16) -> Option<ReviewBook> {
+fn book(saved: Saved, this_year: u16, photo: &dyn Fn(&str) -> Option<Photo>) -> Option<ReviewBook> {
     let number = IssueNumber::new(&saved.number).ok()?;
     let series = clean(&saved.series);
     if series.is_empty() {
@@ -325,12 +371,23 @@ fn book(saved: Saved, this_year: u16) -> Option<ReviewBook> {
             research: clean(&saved.research),
         },
         included,
+        front: saved.front.as_deref().and_then(photo),
+        back: saved.back.as_deref().and_then(photo),
     })
 }
 
-/// The books in a results file's text. Books that cannot be read are
-/// left out; a file that cannot be read at all is an error.
+/// The books in a results file's text, without their photos. Books that
+/// cannot be read are left out; a file that cannot be read at all is an
+/// error.
 pub fn from_json(text: &str, this_year: u16) -> Result<Vec<ReviewBook>, String> {
+    read(text, this_year, &|_| None)
+}
+
+fn read(
+    text: &str,
+    this_year: u16,
+    photo: &dyn Fn(&str) -> Option<Photo>,
+) -> Result<Vec<ReviewBook>, String> {
     let file: File = serde_json::from_str(text).map_err(|e| e.to_string())?;
     if file.version != VERSION {
         return Err(format!("results of format {} cannot be read", file.version));
@@ -341,23 +398,49 @@ pub fn from_json(text: &str, this_year: u16) -> Result<Vec<ReviewBook>, String> 
     Ok(file
         .books
         .into_iter()
-        .filter_map(|b| book(b, this_year))
+        .filter_map(|b| book(b, this_year, photo))
         .collect())
 }
 
-/// Writes the results at `path`, readable and writable by the owner only,
-/// whole or not at all. With no books, the file is removed.
-pub fn save(path: &Path, books: &[ReviewBook]) -> std::io::Result<()> {
+/// Where the photos of the results at `path` are kept.
+fn photo_dir(path: &Path) -> std::path::PathBuf {
+    path.with_extension("photos")
+}
+
+/// Whether `name` is one [`Photo::new`] could have given, so a name in
+/// an altered file cannot reach outside the photo folder.
+fn photo_name(name: &str) -> bool {
+    name.len() == 32
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+/// A kept photo, if it is there and starts as a JPEG does. It is decoded
+/// within limits wherever it is shown, and again by MyLongboxDB.
+fn read_photo(dir: &Path, name: &str) -> Option<Photo> {
+    if !photo_name(name) {
+        return None;
+    }
+    let file = std::fs::File::open(dir.join(format!("{name}.jpg"))).ok()?;
+    let mut bytes = Vec::new();
+    file.take(MAX_PHOTO_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .ok()?;
+    if u64::try_from(bytes.len()).unwrap_or(u64::MAX) > MAX_PHOTO_BYTES {
+        return None;
+    }
+    Some(Photo {
+        name: name.to_owned(),
+        jpeg: Jpeg::new(bytes)?,
+    })
+}
+
+/// Writes `bytes` to `path`, readable and writable by the owner only,
+/// whole or not at all.
+fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     use std::os::unix::fs::OpenOptionsExt;
 
-    if books.is_empty() {
-        return match std::fs::remove_file(path) {
-            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
-            _ => Ok(()),
-        };
-    }
-    let dir = path.parent().unwrap_or(Path::new("."));
-    std::fs::create_dir_all(dir)?;
     let temp = path.with_extension("tmp");
     let written = (|| {
         let mut out = std::fs::OpenOptions::new()
@@ -366,7 +449,7 @@ pub fn save(path: &Path, books: &[ReviewBook]) -> std::io::Result<()> {
             .truncate(true)
             .mode(0o600)
             .open(&temp)?;
-        out.write_all(to_json(books).as_bytes())?;
+        out.write_all(bytes)?;
         out.sync_all()?;
         std::fs::rename(&temp, path)
     })();
@@ -374,6 +457,78 @@ pub fn save(path: &Path, books: &[ReviewBook]) -> std::io::Result<()> {
         let _ = std::fs::remove_file(&temp);
     }
     written
+}
+
+/// Writes the photos not yet kept; a kept photo never changes.
+fn save_photos(dir: &Path, books: &[ReviewBook]) -> std::io::Result<()> {
+    use std::os::unix::fs::DirBuilderExt;
+
+    let photos: Vec<&Photo> = books
+        .iter()
+        .flat_map(|b| b.front.iter().chain(b.back.iter()))
+        .collect();
+    if photos.is_empty() {
+        return Ok(());
+    }
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(dir)?;
+    for photo in photos {
+        let path = dir.join(format!("{}.jpg", photo.name));
+        if !path.exists() {
+            write_private(&path, photo.jpeg.bytes())?;
+        }
+    }
+    Ok(())
+}
+
+/// Removes the kept photos no book has any more.
+fn forget_photos(dir: &Path, books: &[ReviewBook]) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let file = entry.file_name();
+        let kept = file
+            .to_str()
+            .and_then(|f| f.strip_suffix(".jpg"))
+            .is_some_and(|name| {
+                books.iter().any(|b| {
+                    [&b.front, &b.back]
+                        .into_iter()
+                        .flatten()
+                        .any(|p| p.name == name)
+                })
+            });
+        if !kept {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+    let _ = std::fs::remove_dir(dir);
+}
+
+/// Writes the results at `path`, readable and writable by the owner only,
+/// whole or not at all, and their photos beside it. With no books, the
+/// file and photos are removed.
+pub fn save(path: &Path, books: &[ReviewBook]) -> std::io::Result<()> {
+    let photos = photo_dir(path);
+    if books.is_empty() {
+        let removed = match std::fs::remove_file(path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e),
+            _ => Ok(()),
+        };
+        forget_photos(&photos, books);
+        return removed;
+    }
+    let dir = path.parent().unwrap_or(Path::new("."));
+    std::fs::create_dir_all(dir)?;
+    // Photos first, so the file never names one that is not there; the
+    // ones it no longer names go only once it is written.
+    save_photos(&photos, books)?;
+    write_private(path, to_json(books).as_bytes())?;
+    forget_photos(&photos, books);
+    Ok(())
 }
 
 /// The results kept at `path`; none if there is no file.
@@ -390,7 +545,8 @@ pub fn load(path: &Path, this_year: u16) -> Result<Vec<ReviewBook>, String> {
     if u64::try_from(text.len()).unwrap_or(u64::MAX) > MAX_FILE_BYTES {
         return Err("the results file is too large".into());
     }
-    from_json(&text, this_year)
+    let photos = photo_dir(path);
+    read(&text, this_year, &|name| read_photo(&photos, name))
 }
 
 #[cfg(test)]
