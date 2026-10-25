@@ -77,19 +77,20 @@ const STRUCTURE_TOKENS: u32 = 16_000;
 const CHECK_TOKENS: u32 = 8_000;
 
 /// What each step is expected to use, for the estimate before a run.
-/// These are first guesses, to be replaced with what the live trial
-/// measures: thinking counts as output, and each search's results become
-/// input.
+/// Thinking counts as output, and each search's results become input.
+/// The research's figures are from the live trial of 2026-10-24 on Opus
+/// 5.5, which read about 77,000 tokens over 3 searches a book, rounded
+/// up; the others' are first guesses that it found close.
 pub fn planned(settings: &Settings) -> [Planned; 3] {
     let searches = u64::from(settings.max_searches);
     [
         Planned {
-            input_tokens: 2_000,
+            input_tokens: 4_000,
             likely_output_tokens: 4_000,
             most_output_tokens: u64::from(RESEARCH_TOKENS),
-            likely_searches: searches.saturating_sub(1).max(1).min(searches),
+            likely_searches: searches.min(3),
             most_searches: searches,
-            tokens_per_search: 5_000,
+            tokens_per_search: 25_000,
             images: 0,
         },
         Planned {

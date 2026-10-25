@@ -396,12 +396,12 @@ fn an_edit_that_no_longer_reads_is_left_out() {
 }
 
 #[test]
-fn a_book_is_estimated_at_about_forty_cents_on_opus_until_measured() {
+fn a_book_is_estimated_at_about_sixty_cents_on_opus_as_measured() {
     let opus = crate::cost::anthropic_price("claude-opus-5-5").unwrap();
     let estimate = estimate_book(&opus, &Settings::balanced(YEAR));
     assert!(estimate.likely < estimate.most);
-    assert_eq!(crate::cost::dollars(estimate.likely), "$0.39");
-    assert_eq!(crate::cost::dollars(estimate.most), "$1.02");
+    assert_eq!(crate::cost::dollars(estimate.likely), "$0.61");
+    assert_eq!(crate::cost::dollars(estimate.most), "$1.43");
 }
 
 #[test]
