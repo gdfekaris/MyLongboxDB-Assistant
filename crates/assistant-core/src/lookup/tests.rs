@@ -209,6 +209,7 @@ fn each_step_is_asked_what_the_design_says() {
     assert!(research.system.contains("Grand Comics Database"));
     assert!(research.system.contains("never instructions"));
     assert!(research.user.contains("Start year: 1954"));
+    assert!(research.images.is_empty());
     let asked = provider.answers_asked.borrow();
     assert_eq!(asked[0].name, "book");
     assert!(
@@ -532,7 +533,8 @@ fn the_cover_is_read_and_then_looked_up_like_a_line() {
     assert_eq!(spent.cost, Picodollars(16 * 10_000_000_000));
 
     let asked = provider.answers_asked.borrow();
-    // The read step gets the photos, front first, and only it does.
+    // The read step gets the photos, front first; the steps after the
+    // research do not.
     assert_eq!(asked[0].name, "cover");
     assert_eq!(
         asked[0].images,
@@ -559,6 +561,9 @@ fn the_cover_is_read_and_then_looked_up_like_a_line() {
     );
     let research = &provider.research_asked.borrow()[0];
     assert!(research.system.contains("the very edition shown"));
+    // The research sees the front, to tell which cover it is; the back
+    // was read already.
+    assert_eq!(research.images, [covers(true).front]);
     assert!(!research.system.contains("first printing's standard cover"));
     assert!(research.system.contains("- barcode:"));
     assert!(
@@ -584,7 +589,7 @@ fn photo_books_follow_the_owner_s_conventions() {
         ])),
         no_problems(),
     ]);
-    let draft = run_covers(&provider, false).0.unwrap();
+    let mut draft = run_covers(&provider, false).0.unwrap();
     let v = |key| draft.value(key).unwrap().clone();
     assert_eq!(v("series").text, "Astonishing Robot Tales");
     assert_eq!(v("publisher").text, "Marvel Comics");
@@ -592,6 +597,15 @@ fn photo_books_follow_the_owner_s_conventions() {
     assert_eq!(v("printing").text, "1");
     assert!(v("printing").accepted);
     assert_eq!(v("printing").source, None);
+    // The variant's name waits for the owner's words.
+    assert!(!v("variant").accepted);
+    assert!(draft.book(YEAR).unwrap().edition.variant.is_empty());
+    draft
+        .values
+        .iter_mut()
+        .find(|v| v.key == "variant")
+        .unwrap()
+        .accepted = true;
     let book = draft.book(YEAR).unwrap();
     assert_eq!(book.series.name, "Astonishing Robot Tales");
     assert_eq!(book.edition.printing, Some(1));
@@ -922,4 +936,9 @@ fn a_photo_book_costs_its_reading_more_than_a_line() {
     let read = planned_read(&[(1600, 2400), (1600, 2400)]);
     assert!(read.input_tokens <= 1_500 + 2 * 4_784);
     assert_eq!(read.images, 2);
+    // The research reads the front again before it starts and after each
+    // search, and that is counted too.
+    let read_only = line.plus(read.estimate(&opus));
+    assert!(photo.likely > read_only.likely);
+    assert!(photo.most > read_only.most);
 }

@@ -106,14 +106,13 @@ impl AnthropicLookup<'_> {
     }
 }
 
-/// A structured request's photos, then its text: models read a photo
-/// better with the question after it.
-fn parts(request: &SchemaRequest) -> Vec<Part> {
-    request
-        .images
+/// A request's photos, then its text: models read a photo better with
+/// the question after it.
+fn parts(images: &[assistant_core::Jpeg], user: &str) -> Vec<Part> {
+    images
         .iter()
         .map(|jpeg| Part::Jpeg(jpeg.bytes().to_vec()))
-        .chain(std::iter::once(Part::Text(request.user.clone())))
+        .chain(std::iter::once(Part::Text(user.to_owned())))
         .collect()
 }
 
@@ -124,7 +123,7 @@ impl Provider for AnthropicLookup<'_> {
                 model: self.model.clone(),
                 max_tokens: request.max_tokens,
                 system: request.system.clone(),
-                user: vec![Part::Text(request.user.clone())],
+                user: parts(&request.images, &request.user),
                 resume: Vec::new(),
                 web_search: Some(WebSearch {
                     max_uses: request.max_searches,
@@ -154,7 +153,7 @@ impl Provider for AnthropicLookup<'_> {
                 model: self.model.clone(),
                 max_tokens: request.max_tokens,
                 system: request.system.clone(),
-                user: parts(request),
+                user: parts(&request.images, &request.user),
                 resume: Vec::new(),
                 web_search: None,
                 schema: Some(Schema {
@@ -226,7 +225,7 @@ impl Provider for OpenRouterLookup<'_> {
                 model: self.model.id.clone(),
                 max_tokens: request.max_tokens,
                 system: request.system.clone(),
-                user: vec![Part::Text(request.user.clone())],
+                user: parts(&request.images, &request.user),
                 web_search: Some(openrouter::WebSearch {
                     max_results: RESULTS_PER_SEARCH,
                     max_uses: request.max_searches,
@@ -251,7 +250,7 @@ impl Provider for OpenRouterLookup<'_> {
                 model: self.model.id.clone(),
                 max_tokens: request.max_tokens,
                 system: request.system.clone(),
-                user: parts(request),
+                user: parts(&request.images, &request.user),
                 web_search: None,
                 schema: Some(Schema {
                     name: request.name,
@@ -303,7 +302,7 @@ mod tests {
             max_tokens: 100,
         };
         assert_eq!(
-            parts(&request),
+            parts(&request.images, &request.user),
             [
                 Part::Jpeg(vec![0xFF, 0xD8, 0xFF, 1]),
                 Part::Jpeg(vec![0xFF, 0xD8, 0xFF, 2]),

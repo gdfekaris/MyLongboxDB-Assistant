@@ -131,9 +131,23 @@ pub fn estimate_book(price: &Price, settings: &Settings) -> Estimate {
 }
 
 /// What one book's lookup from photos of these sizes should and at most
-/// can cost: the read step, then the same steps as a typed line.
+/// can cost: the read step, then the same steps as a typed line, with the
+/// front photo read again by the research before it starts and after
+/// each search.
 pub fn estimate_photo_book(price: &Price, settings: &Settings, photos: &[(u32, u32)]) -> Estimate {
-    estimate_book(price, settings).plus(planned_read(photos).estimate(price))
+    let front = photos.first().map_or(0, |(w, h)| image_tokens(*w, *h));
+    let [research, structure, check] = planned(settings);
+    let research = Planned {
+        input_tokens: research.input_tokens + front,
+        tokens_per_search: research.tokens_per_search + front,
+        images: research.images + u64::from(front > 0),
+        ..research
+    };
+    [research, structure, check, planned_read(photos)]
+        .iter()
+        .fold(Estimate::default(), |sum, step| {
+            sum.plus(step.estimate(price))
+        })
 }
 
 /// The query for the series the owner picked from an unsettled lookup's
@@ -152,6 +166,9 @@ pub fn choose(query: &BookQuery, candidate: &Candidate) -> BookQuery {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ResearchRequest {
     pub system: String,
+    /// The owner's front cover, sent before the text, so the research can
+    /// tell which of an issue's covers and printings it shows.
+    pub images: Vec<Jpeg>,
     pub user: String,
     pub max_searches: u32,
     pub effort: Effort,
@@ -601,7 +618,7 @@ pub fn look_up(
     cancel: &AtomicBool,
     spent: &mut Spent,
 ) -> Result<Draft, LookupError> {
-    look_up_from(provider, query, None, settings, cancel, spent)
+    look_up_from(provider, query, None, None, settings, cancel, spent)
 }
 
 /// The owner's photos of one book: the front cover, and the back if they
@@ -658,12 +675,36 @@ pub fn look_up_covers(
     if cancel.load(Ordering::Relaxed) {
         return Err(LookupError::Failed(Failure::Cancelled));
     }
-    let mut draft = look_up_from(provider, &query, Some(&reading), settings, cancel, spent)?;
+    let mut draft = look_up_from(
+        provider,
+        &query,
+        Some(&reading),
+        Some(&covers.front),
+        settings,
+        cancel,
+        spent,
+    )?;
     compare_barcodes(&mut draft, &reading);
     first_printing(&mut draft, &reading);
     printed_number(&mut draft, &reading);
     undated_cover(&mut draft, &reading);
+    variant_name(&mut draft);
     Ok(draft)
+}
+
+/// Variant names are the collection's own, more a habit than a rule, so
+/// one found waits for the owner to put it in their words.
+fn variant_name(draft: &mut Draft) {
+    if let Some(value) = draft
+        .values
+        .iter_mut()
+        .find(|v| v.key == "variant" && !v.text.is_empty())
+    {
+        value.accepted = false;
+        if value.note.is_empty() {
+            value.note = "name it as your collection names variants".into();
+        }
+    }
 }
 
 /// A book dated nowhere, on its cover, in its indicia, or in the
@@ -787,6 +828,7 @@ fn look_up_from(
     provider: &dyn Provider,
     query: &BookQuery,
     reading: Option<&Reading>,
+    front: Option<&Jpeg>,
     settings: &Settings,
     cancel: &AtomicBool,
     spent: &mut Spent,
@@ -806,6 +848,7 @@ fn look_up_from(
                     prompts::REPORT,
                     prompts::field_list(from_text)
                 ),
+                images: front.into_iter().cloned().collect(),
                 user: format!("{}{cover}", describe(query, reading)),
                 max_searches: settings.max_searches,
                 effort: settings.effort,

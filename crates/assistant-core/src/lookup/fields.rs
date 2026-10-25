@@ -224,7 +224,7 @@ pub const FIELDS: &[Field] = &[
         "variant",
         "Variant",
         Kind::Text,
-        "The cover variant's name. A named edition comes first: an event, store, or convention exclusive such as SDCC 1995 Convention variant or FCBD 2024, a finish such as platinum cover or foil, a ratio such as 1:25 ratio variant, or a lettered cover such as Cover B. Otherwise, for a cover by another artist, the artist's surname and cover, such as Okazaki cover. Blank for the standard cover.",
+        "The cover variant's name. A named edition comes first: a store or convention exclusive such as KRS Comics Exclusive or SDCC 1995 Convention variant, an event such as FCBD 2024, an edition such as Whitman Variant or Facsimile, a finish such as platinum cover or foil, or a ratio such as 1:25 ratio variant. Otherwise, for a cover by another artist, the artist's surname and cover, such as Okazaki cover, even where the publisher letters it, as Cover B. Blank for the standard cover.",
     ),
     edition(
         "variant_cover_artists",
