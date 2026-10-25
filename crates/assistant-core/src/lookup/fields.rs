@@ -84,7 +84,7 @@ pub const FIELDS: &[Field] = &[
         "series",
         "Series",
         Kind::Text,
-        "The series' name as the Grand Comics Database or the publisher gives it, without its year or volume, and without a leading The.",
+        "The series' name as the Grand Comics Database or the publisher gives it, without its year or volume, and without a leading The. Keep a slash the title has, as in Batman/Spawn: War Devil. A one-shot's own title, such as Giant Superhero Holiday Grab-Bag, is its story title, not part of the series.",
     ),
     field(
         "start_year",
@@ -110,7 +110,7 @@ pub const FIELDS: &[Field] = &[
         "publisher",
         "Publisher",
         Kind::Text,
-        "The publisher by its short name: Marvel Comics, Archie Comics, and otherwise the brand alone, such as DC, Image, Dark Horse, or IDW.",
+        "The publisher by its short name: Marvel Comics, Archie Comics, Mirage Studios, and otherwise the brand alone, such as DC, Image, Dark Horse, or IDW. Two publishers are joined by and, as in DC and Marvel Comics.",
     ),
     field(
         "imprint",
@@ -122,7 +122,7 @@ pub const FIELDS: &[Field] = &[
         "category",
         "Kind",
         Kind::Category,
-        "comic, magazine, or collected (a trade paperback, hardcover, or other book reprinting issues).",
+        "comic, magazine, or collected (a trade paperback, hardcover, or other book reprinting issues). A treasury-size or prestige-format comic book is a comic; magazine is only for a magazine sold as one, such as Savage Sword of Conan.",
     ),
     field(
         "magazine_format",
@@ -158,7 +158,7 @@ pub const FIELDS: &[Field] = &[
         "cover_date",
         "Cover date",
         Kind::CoverDate,
-        "The date printed on the cover, as YYYY-MM, or YYYY when it gives no month.",
+        "The cover date as YYYY-MM: as the cover or the indicia prints it, or where they give no month, the month the Grand Comics Database gives in brackets. YYYY only when no source gives a month.",
     ),
     field(
         "release_date",
@@ -182,7 +182,7 @@ pub const FIELDS: &[Field] = &[
         "key_issue",
         "Key issue",
         Kind::YesNo,
-        "yes only if reference sources call it a key issue, such as for a first appearance or death.",
+        "yes only if reference sources call it a key issue, such as for a first appearance or death. Never for a facsimile or other reprint, whatever the original is.",
     ),
     judgment(
         "key_reason",
@@ -230,7 +230,7 @@ pub const FIELDS: &[Field] = &[
         "variant_cover_artists",
         "Variant cover artists",
         Kind::Text,
-        "For a variant cover only: who drew it, full names separated by semicolons; blank for the standard cover.",
+        "For a variant cover only: who drew it, not who coloured it, full names separated by semicolons; blank for the standard cover.",
     ),
     edition(
         "printing",
@@ -264,14 +264,25 @@ pub const FIELDS: &[Field] = &[
 pub(crate) fn house_style(key: &str, text: &str) -> String {
     let text = text.trim();
     match key {
+        // The catalogue's spaced hyphen stands for the title's slash.
         "series" => match text.get(..4) {
             Some(the) if the.eq_ignore_ascii_case("the ") && text.len() > 4 => {
                 text[4..].trim_start().to_owned()
             }
             _ => text.to_owned(),
-        },
+        }
+        .replace(" - ", "/"),
+        "publisher" if text.contains(';') => {
+            let names: Vec<String> = text
+                .split(';')
+                .map(|name| house_style("publisher", name))
+                .filter(|name| !name.is_empty())
+                .collect();
+            names.join(" and ")
+        }
         "publisher" => match text.to_lowercase().as_str() {
             "marvel" | "marvel comics" | "marvel comics group" => "Marvel Comics".into(),
+            "mirage" => "Mirage Studios".into(),
             "dc comics" => "DC".into(),
             "image comics" => "Image".into(),
             "dark horse comics" => "Dark Horse".into(),
@@ -452,6 +463,15 @@ mod tests {
         assert_eq!(house_style("publisher", "DC Comics"), "DC");
         assert_eq!(house_style("publisher", "Image Comics"), "Image");
         assert_eq!(house_style("publisher", "Fantagraphics"), "Fantagraphics");
+        assert_eq!(house_style("publisher", "Mirage"), "Mirage Studios");
+        assert_eq!(
+            house_style("publisher", "DC Comics; Marvel"),
+            "DC and Marvel Comics"
+        );
+        assert_eq!(
+            house_style("series", "Batman - Spawn: War Devil"),
+            "Batman/Spawn: War Devil"
+        );
         assert_eq!(house_style("story_title", "The End"), "The End");
         assert_eq!(
             house_style(

@@ -5,7 +5,7 @@
 use super::fields::FIELDS;
 
 /// Raised with every change to the texts below.
-pub const PROMPT_VERSION: &str = "2026-10-24.7";
+pub const PROMPT_VERSION: &str = "2026-10-25.1";
 
 /// The read step, for photos: what is printed on the covers, and nothing
 /// looked up or remembered. The items to report follow it.
@@ -56,8 +56,19 @@ letterer, cover artist, editor, and for magazines, article writer and \
 interview. Editors are the issue's own editors, never the \
 editor-in-chief. Use artist only when a source credits the art without saying \
 who pencilled and who inked; never split such a credit yourself.
-- Name a character or team's first appearance only where a source says \
-it is one.
+- For each role give only the main credit: leave out assistants, \
+assistant and associate editors, and anyone credited only for layouts, \
+breakdowns, finishes, or plot help. Name more than one person in a role \
+only where the issue credits them as equals.
+- Name each creator as the issue credited them at the time. Where a \
+source gives a later name beside the credited one, as in Christopher \
+Priest [as Jim Owsley], use the credited name, Jim Owsley.
+- Characters and teams: only those a collector would name the issue \
+for, meaning first appearances, origins, deaths, and important guests, \
+not the series' regular cast as a matter of course or everyone who \
+appears. Name a first appearance only where a source says it is one.
+- An annual is its own series: Amazing Spider-Man Annual #1, not \
+Amazing Spider-Man #Annual 1.
 ";
 
 /// After the research rules and the edition rule: the fields to report.
@@ -88,6 +99,12 @@ not on the cover: use what it says to find the issue and its printing.
 - Where the cover prints no issue number, find the issue from its other \
 details and report its number as issue_number; a one-shot published \
 without a number has none, reported as nn.
+- A facsimile edition or other reprint of one issue is catalogued as that \
+original issue, its series and start year, with Facsimile as its variant.
+- Where the cover prints no date or only a year, report the cover date \
+the indicia prints, or the month the Grand Comics Database gives in \
+brackets. Only where no source gives one, as for many modern books, \
+report the month it was released as its cover date.
 ";
 
 /// The structuring step: turn the research notes into the schema's JSON,

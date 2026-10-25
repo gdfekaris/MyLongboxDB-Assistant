@@ -758,6 +758,107 @@ fn a_cover_without_a_number_is_looked_up_by_its_other_details() {
 }
 
 #[test]
+fn an_annual_is_its_own_series() {
+    let annual = read_answer(
+        true,
+        &[
+            ("title", "Astonishing Robot Tales", "front"),
+            ("issue_number", "Annual 2", "front, top left"),
+        ],
+    );
+    let provider = Scripted::new(vec![
+        answered(annual),
+        researched(2),
+        answered(photo_structured(&[(
+            "series",
+            value("Astonishing Robot Tales", 1, "high"),
+        )])),
+        no_problems(),
+    ]);
+    let draft = run_covers(&provider, false).0.unwrap();
+    assert_eq!(draft.query.number.as_str(), "2");
+    let book = draft.book(YEAR).unwrap();
+    assert_eq!(book.series.name, "Astonishing Robot Tales Annual");
+    assert_eq!(book.issue.number.unwrap().as_str(), "2");
+}
+
+#[test]
+fn an_undated_cover_takes_the_month_it_was_released() {
+    let undated = read_answer(
+        true,
+        &[
+            ("title", "Astonishing Robot Tales", "front"),
+            ("issue_number", "1", "front"),
+        ],
+    );
+    let provider = Scripted::new(vec![
+        answered(undated),
+        researched(2),
+        answered(photo_structured(&[(
+            "release_date",
+            value("2024-03-06", 2, "high"),
+        )])),
+        no_problems(),
+    ]);
+    let draft = run_covers(&provider, false).0.unwrap();
+    let date = draft.value("cover_date").unwrap();
+    assert_eq!(date.text, "2024-03");
+    assert_eq!(date.source, Some(1));
+    assert!(date.note.contains("no date"));
+
+    // The date the indicia or the catalogue gives is the book's.
+    let undated = read_answer(
+        true,
+        &[
+            ("title", "Astonishing Robot Tales", "front"),
+            ("issue_number", "1", "front"),
+        ],
+    );
+    let provider = Scripted::new(vec![
+        answered(undated),
+        researched(2),
+        answered(photo_structured(&[
+            ("cover_date", value("2024-05", 1, "high")),
+            ("release_date", value("2024-03-06", 2, "high")),
+        ])),
+        no_problems(),
+    ]);
+    let draft = run_covers(&provider, false).0.unwrap();
+    assert_eq!(draft.value("cover_date").unwrap().text, "2024-05");
+
+    // A date the cover prints is kept.
+    let provider = Scripted::new(vec![
+        answered(robot_cover()),
+        researched(2),
+        answered(photo_structured(&[
+            ("cover_date", value("1954-03", 1, "high")),
+            ("release_date", value("1954-01-12", 2, "high")),
+        ])),
+        no_problems(),
+    ]);
+    let draft = run_covers(&provider, false).0.unwrap();
+    assert_eq!(draft.value("cover_date").unwrap().text, "1954-03");
+}
+
+#[test]
+fn a_cover_date_of_only_a_year_waits_for_the_owner() {
+    let provider = Scripted::new(vec![
+        answered(robot_cover()),
+        researched(2),
+        answered(photo_structured(&[(
+            "cover_date",
+            value("1954", 1, "high"),
+        )])),
+        no_problems(),
+    ]);
+    let draft = run_covers(&provider, false).0.unwrap();
+    let date = draft.value("cover_date").unwrap();
+    assert_eq!(date.text, "1954");
+    assert!(!date.accepted);
+    assert!(date.note.contains("month"));
+}
+
+#[test]
 fn a_grading_label_gives_the_number_the_cover_does_not() {
     let slabbed = read_answer(
         true,

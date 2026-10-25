@@ -662,7 +662,37 @@ pub fn look_up_covers(
     compare_barcodes(&mut draft, &reading);
     first_printing(&mut draft, &reading);
     printed_number(&mut draft, &reading);
+    undated_cover(&mut draft, &reading);
     Ok(draft)
+}
+
+/// A book dated nowhere, on its cover, in its indicia, or in the
+/// catalogue, as many modern ones are, is dated by the month it was
+/// released, as the owner records it. A date the catalogue gives is kept:
+/// it is the one the indicia prints, or the month it supplies.
+fn undated_cover(draft: &mut Draft, reading: &Reading) {
+    if draft.identity != Identity::Identified || reading.get("cover_date").is_some() {
+        return;
+    }
+    let Some(release) = draft
+        .values
+        .iter()
+        .find(|v| v.key == "release_date" && v.text.len() >= 7)
+        .cloned()
+    else {
+        return;
+    };
+    if let Some(value) = draft
+        .values
+        .iter_mut()
+        .find(|v| v.key == "cover_date" && v.text.is_empty())
+    {
+        value.text = release.text[..7].to_owned();
+        value.source = release.source;
+        value.confidence = release.confidence;
+        value.accepted = release.accepted;
+        value.note = "your cover prints no date: the month it was released".into();
+    }
 }
 
 /// The issue number the research found is wanted only where the covers
@@ -879,5 +909,66 @@ fn look_up_from(
     for value in &mut draft.values {
         value.text = fields::house_style(value.key, &value.text);
     }
+    annual_series(&mut draft);
+    year_only_date(&mut draft);
     Ok(draft)
+}
+
+/// The collection dates books by month. A cover date of only a year is
+/// usually a month the sources left out, not a book without one, so the
+/// owner looks before it is exported.
+fn year_only_date(draft: &mut Draft) {
+    if let Some(value) = draft
+        .values
+        .iter_mut()
+        .find(|v| v.key == "cover_date" && v.text.len() == 4)
+    {
+        value.accepted = false;
+        if value.note.is_empty() {
+            value.note = "only the year was found: add the month if the book gives one".into();
+        }
+    }
+}
+
+/// An annual is its own series in the collection: Amazing Spider-Man
+/// Annual #1, not Amazing Spider-Man #Annual 1.
+fn annual_series(draft: &mut Draft) {
+    fn rest(number: &str) -> Option<&str> {
+        let lower = number.to_ascii_lowercase();
+        let rest = lower.strip_prefix("annual")?;
+        let rest = number[number.len() - rest.len()..].trim();
+        (!rest.is_empty()).then_some(rest)
+    }
+    fn annual(series: &str) -> String {
+        if series.to_ascii_lowercase().ends_with(" annual") {
+            series.to_owned()
+        } else {
+            format!("{series} Annual")
+        }
+    }
+    let found = draft
+        .values
+        .iter()
+        .find(|v| v.key == "issue_number")
+        .map(|v| v.text.clone())
+        .unwrap_or_default();
+    let printed = rest(draft.query.number.as_str())
+        .and_then(|r| crate::issue_number::IssueNumber::new(r).ok());
+    if let Some(number) = printed {
+        draft.query.number = number;
+    } else if let Some(r) = rest(&found).map(str::to_owned) {
+        if let Some(v) = draft.values.iter_mut().find(|v| v.key == "issue_number") {
+            v.text = r;
+        }
+    } else {
+        return;
+    }
+    draft.query.series = annual(&draft.query.series);
+    if let Some(v) = draft
+        .values
+        .iter_mut()
+        .find(|v| v.key == "series" && !v.text.is_empty())
+    {
+        v.text = annual(&v.text);
+    }
 }
