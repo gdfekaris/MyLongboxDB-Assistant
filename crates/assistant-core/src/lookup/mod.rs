@@ -746,12 +746,12 @@ fn look_up_from(
     if cancel.load(Ordering::Relaxed) {
         return Err(LookupError::Failed(Failure::Cancelled));
     }
-    // The covers' items come first, so they keep their numbers whatever
-    // the research found.
+    // The research's pages keep the first numbers, which its notes mark
+    // their passages with; the covers' items follow.
     let research = match reading {
         None => research,
         Some(r) => Research {
-            sources: r.sources().into_iter().chain(research.sources).collect(),
+            sources: research.sources.into_iter().chain(r.sources()).collect(),
             text: research.text,
         },
     };

@@ -477,8 +477,8 @@ fn run_covers(provider: &Scripted, back: bool) -> (Result<Draft, LookupError>, S
 }
 
 /// A structured answer for a photo lookup: every field blank but those
-/// given, edition fields included. The cover's items are sources 1 to 6,
-/// and the research's two pages 7 and 8.
+/// given, edition fields included. The research's two pages are sources
+/// 1 and 2, and the cover's items 3 to 8.
 fn photo_structured(given: &[(&str, Json)]) -> Json {
     let mut answer = structured(given);
     let fields = answer["fields"].as_object_mut().unwrap();
@@ -497,9 +497,9 @@ fn the_cover_is_read_and_then_looked_up_like_a_line() {
         answered(robot_cover()),
         researched(2),
         answered(photo_structured(&[
-            ("series", value("Astonishing Robot Tales", 7, "high")),
-            ("cover_price", value("0.10", 4, "high")),
-            ("distribution", value("direct", 6, "high")),
+            ("series", value("Astonishing Robot Tales", 1, "high")),
+            ("cover_price", value("0.10", 6, "high")),
+            ("distribution", value("direct", 8, "high")),
         ])),
         no_problems(),
     ]);
@@ -511,21 +511,21 @@ fn the_cover_is_read_and_then_looked_up_like_a_line() {
     assert_eq!(draft.query.line, 4);
     // The cover's items are sources, first, and values can cite them.
     assert_eq!(draft.sources.len(), 8);
-    assert_eq!(draft.sources[3].url, COVER_PHOTO);
-    assert_eq!(draft.sources[3].cited_text, "10¢");
+    assert_eq!(draft.sources[5].url, COVER_PHOTO);
+    assert_eq!(draft.sources[5].cited_text, "10¢");
     assert_eq!(
-        draft.sources[3].title,
+        draft.sources[5].title,
         "Your cover photo: US price, front, top left"
     );
     let v = |key| draft.value(key).unwrap().clone();
     assert_eq!(v("cover_price").text, "0.10");
-    assert_eq!(v("cover_price").source, Some(3));
+    assert_eq!(v("cover_price").source, Some(5));
     assert_eq!(v("distribution").text, "direct");
-    assert_eq!(v("series").source, Some(6));
+    assert_eq!(v("series").source, Some(0));
     // The barcode, left blank by the structuring, comes from the cover,
     // its check digit holding.
     assert_eq!(v("barcode").text, "75960608936900111");
-    assert_eq!(v("barcode").source, Some(4));
+    assert_eq!(v("barcode").source, Some(6));
     assert!(v("barcode").accepted);
     // Read, research, structure, and check all paid for.
     assert_eq!(spent.cost, Picodollars(16 * 10_000_000_000));
@@ -547,7 +547,7 @@ fn the_cover_is_read_and_then_looked_up_like_a_line() {
     assert!(
         asked[1]
             .user
-            .contains("[4] Your cover photo: US price, front, top left")
+            .contains("[6] Your cover photo: US price, front, top left")
     );
     let research = &provider.research_asked.borrow()[0];
     assert!(research.system.contains("the very edition shown"));
@@ -566,12 +566,12 @@ fn photo_books_follow_the_owner_s_conventions() {
         answered(robot_cover()),
         researched(2),
         answered(photo_structured(&[
-            ("series", value("The Astonishing Robot Tales", 7, "high")),
-            ("publisher", value("Marvel", 7, "high")),
-            ("variant", value("Okazaki cover", 8, "high")),
+            ("series", value("The Astonishing Robot Tales", 1, "high")),
+            ("publisher", value("Marvel", 1, "high")),
+            ("variant", value("Okazaki cover", 2, "high")),
             (
                 "variant_cover_artists",
-                value("Takashi Okazaki; Ada Sprocket", 8, "high"),
+                value("Takashi Okazaki; Ada Sprocket", 2, "high"),
             ),
         ])),
         no_problems(),
@@ -620,7 +620,7 @@ fn a_barcode_found_online_that_differs_from_the_cover_is_doubted() {
         researched(2),
         answered(photo_structured(&[(
             "barcode",
-            value("75960608936900211", 7, "high"),
+            value("75960608936900211", 1, "high"),
         )])),
         no_problems(),
     ]);

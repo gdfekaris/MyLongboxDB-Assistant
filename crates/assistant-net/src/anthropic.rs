@@ -18,6 +18,8 @@ pub const API_VERSION: &str = "2026-10-21";
 pub const DEFAULT_MODEL: &str = "claude-opus-5-5";
 /// The server-side web search tool.
 const WEB_SEARCH_TOOL: &str = "web_search_20260209";
+/// The most passages kept from one page; each is at most 150 characters.
+const MAX_PASSAGES: usize = 12;
 /// Pages of the model list read at most.
 const MAX_MODEL_PAGES: usize = 10;
 
@@ -154,9 +156,11 @@ impl Message {
             .collect()
     }
 
-    /// The pages the answer's text cites, each once, in order.
+    /// The pages the answer's text cites, each once, in order, with every
+    /// passage cited from it: a page is often cited for many facts, and a
+    /// later step can only hold a fact to words it is shown.
     pub fn citations(&self) -> Vec<Citation> {
-        let mut seen = Vec::<Citation>::new();
+        let mut seen = Vec::<(Citation, usize)>::new();
         for citation in self
             .blocks("text")
             .filter_map(|b| b["citations"].as_array())
@@ -165,16 +169,50 @@ impl Message {
             let Some(url) = citation["url"].as_str() else {
                 continue;
             };
-            if seen.iter().any(|c| c.url == url) {
-                continue;
+            let words = citation["cited_text"].as_str().unwrap_or("");
+            match seen.iter_mut().find(|(c, _)| c.url == url) {
+                Some((page, passages)) => {
+                    if *passages < MAX_PASSAGES && !page.cited_text.contains(words) {
+                        page.cited_text.push_str(" … ");
+                        page.cited_text.push_str(words);
+                        *passages += 1;
+                    }
+                }
+                None => seen.push((
+                    Citation {
+                        url: url.to_owned(),
+                        title: citation["title"].as_str().unwrap_or("").to_owned(),
+                        cited_text: words.to_owned(),
+                    },
+                    1,
+                )),
             }
-            seen.push(Citation {
-                url: url.to_owned(),
-                title: citation["title"].as_str().unwrap_or("").to_owned(),
-                cited_text: citation["cited_text"].as_str().unwrap_or("").to_owned(),
-            });
         }
-        seen
+        seen.into_iter().map(|(c, _)| c).collect()
+    }
+
+    /// The answer's text with each cited passage followed by the numbers
+    /// of the pages it cites, as [`citations`](Self::citations) numbers
+    /// them from 1, so a later step can tell which page says what.
+    pub fn marked_text(&self) -> String {
+        let pages = self.citations();
+        let mut text = String::new();
+        for block in self.blocks("text") {
+            text.push_str(block["text"].as_str().unwrap_or(""));
+            let mut marks: Vec<usize> = block["citations"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|c| c["url"].as_str())
+                .filter_map(|url| pages.iter().position(|p| p.url == url))
+                .collect();
+            marks.sort_unstable();
+            marks.dedup();
+            for n in marks {
+                text.push_str(&format!(" [{}]", n + 1));
+            }
+        }
+        text
     }
 
     /// The error codes of searches that failed, such as

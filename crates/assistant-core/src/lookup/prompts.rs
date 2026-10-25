@@ -5,7 +5,7 @@
 use super::fields::FIELDS;
 
 /// Raised with every change to the texts below.
-pub const PROMPT_VERSION: &str = "2026-10-24.3";
+pub const PROMPT_VERSION: &str = "2026-10-24.4";
 
 /// The read step, for photos: what is printed on the covers, and nothing
 /// looked up or remembered. The items to report follow it.
@@ -106,6 +106,9 @@ confidence high when a reference source states it plainly, medium when \
 only a weaker source does or it took reading between the lines, low \
 otherwise; note saying why a value is doubtful or blank, empty otherwise.
 - Write values in the forms given below. Numbers are digits only.
+- A passage of the notes followed by numbers in brackets, such as [2], \
+is what those sources say; cite one of them for what you take from it, \
+and its listed words show what it says.
 - Credits, characters, teams, and story arcs: only those the notes name \
 with a source. part is the story arc part number, or empty.
 - Sources titled Your cover photo are what the owner's own cover shows. \

@@ -158,6 +158,43 @@ fn searched() -> Value {
 }
 
 #[test]
+fn every_passage_of_a_page_is_kept_and_the_text_says_what_it_cites() {
+    let cite = |url: &str, words: &str| json!({"type": "web_search_result_location", "url": url, "title": url, "encrypted_index": "Zm9v", "cited_text": words});
+    let message = parsed(json!({
+        "id": "msg_2",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-opus-5-5",
+        "content": [
+            {"type": "text", "text": "Identified."},
+            {"type": "text", "text": "Writer: Ada Sprocket", "citations": [cite("https://a.example/1", "Script: Ada Sprocket")]},
+            {"type": "text", "text": "\nPrice: 10 cents", "citations": [
+                cite("https://b.example/2", "Price: 0.10 USD"),
+                cite("https://a.example/1", "10 cents"),
+            ]},
+            {"type": "text", "text": "\nPencils: Rex Rivet", "citations": [
+                cite("https://a.example/1", "Pencils: Rex Rivet"),
+                cite("https://a.example/1", "Rex Rivet"),
+            ]},
+        ],
+        "stop_reason": "end_turn",
+        "stop_details": null,
+        "usage": {"input_tokens": 10, "output_tokens": 10}
+    }));
+    let pages = message.citations();
+    assert_eq!(pages.len(), 2);
+    assert_eq!(
+        pages[0].cited_text,
+        "Script: Ada Sprocket … 10 cents … Pencils: Rex Rivet"
+    );
+    assert_eq!(pages[1].cited_text, "Price: 0.10 USD");
+    assert_eq!(
+        message.marked_text(),
+        "Identified.Writer: Ada Sprocket [1]\nPrice: 10 cents [1] [2]\nPencils: Rex Rivet [1]"
+    );
+}
+
+#[test]
 fn a_searched_answer_gives_its_text_sources_and_cost() {
     let message = parsed(searched());
     assert_eq!(message.stop, Stop::EndTurn);

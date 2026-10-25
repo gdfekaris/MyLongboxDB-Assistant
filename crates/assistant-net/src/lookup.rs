@@ -138,7 +138,7 @@ impl Provider for AnthropicLookup<'_> {
         let answer = message.and_then(|m| {
             finished(&m)?;
             Ok(Research {
-                text: m.text(),
+                text: m.marked_text(),
                 sources: sources(m.citations()),
             })
         });
