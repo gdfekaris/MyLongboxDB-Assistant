@@ -338,6 +338,33 @@ fn notes(research: &Research) -> String {
     text
 }
 
+/// The most pages kept from one research answer. Lookups cite a few
+/// dozen at most.
+const MAX_SOURCES: usize = 100;
+const MAX_URL: usize = 2_000;
+const MAX_TITLE: usize = 300;
+/// Room for the dozen short passages kept from a page.
+const MAX_CITED: usize = 3_000;
+
+/// The research's pages as the provider reported them are untrusted
+/// text: cleaned and capped as the model's own answers are, before they
+/// are shown, copied into the later steps' prompts, or saved.
+fn cleaned(research: Research) -> Research {
+    Research {
+        sources: research
+            .sources
+            .into_iter()
+            .take(MAX_SOURCES)
+            .map(|s| Source {
+                url: clean(&s.url, MAX_URL),
+                title: clean(&s.title, MAX_TITLE),
+                cited_text: clean(&s.cited_text, MAX_CITED),
+            })
+            .collect(),
+        text: research.text,
+    }
+}
+
 /// A source's number from an answer: its place in the list, or `None`.
 fn source_index(number: i64, sources: &[Source]) -> Option<usize> {
     usize::try_from(number)
@@ -880,6 +907,7 @@ fn look_up_from(
         ),
         spent,
     )?;
+    let research = cleaned(research);
     if research.sources.is_empty() {
         return Ok(Draft {
             query: query.clone(),
