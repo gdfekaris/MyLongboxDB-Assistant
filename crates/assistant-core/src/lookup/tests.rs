@@ -796,62 +796,49 @@ fn an_annual_is_its_own_series() {
     assert_eq!(book.issue.number.unwrap().as_str(), "2");
 }
 
-#[test]
-fn an_undated_cover_takes_the_month_it_was_released() {
-    let undated = read_answer(
-        true,
-        &[
-            ("title", "Astonishing Robot Tales", "front"),
-            ("issue_number", "1", "front"),
-        ],
-    );
+/// A lookup of a cover that prints `printed` as its date, where the
+/// catalogue gives `catalogue` and the book went on sale on `sale`.
+fn dated(printed: &str, catalogue: &str, sale: &str) -> Value {
+    let mut items = vec![
+        ("title", "Astonishing Robot Tales", "front"),
+        ("issue_number", "1", "front"),
+    ];
+    if !printed.is_empty() {
+        items.push(("cover_date", printed, "front, top right"));
+    }
     let provider = Scripted::new(vec![
-        answered(undated),
+        answered(read_answer(true, &items)),
         researched(2),
-        answered(photo_structured(&[(
-            "release_date",
-            value("2024-03-06", 2, "high"),
-        )])),
+        answered(photo_structured(&[
+            ("cover_date", value(catalogue, 1, "high")),
+            ("release_date", value(sale, 2, "high")),
+        ])),
         no_problems(),
     ]);
     let draft = run_covers(&provider, false).0.unwrap();
-    let date = draft.value("cover_date").unwrap();
+    draft.value("cover_date").unwrap().clone()
+}
+
+#[test]
+fn a_cover_date_is_the_month_printed_or_else_a_modern_book_s_sale_month() {
+    // A modern cover without a date: the month it went on sale, even
+    // where the indicia gives a later one. The sale date's source is the
+    // answer's second, at index 1.
+    let date = dated("", "2024-05", "2024-03-06");
     assert_eq!(date.text, "2024-03");
     assert_eq!(date.source, Some(1));
-    assert!(date.note.contains("no date"));
+    assert!(date.note.contains("went on sale"));
+    assert_eq!(dated("", "", "2024-03-06").text, "2024-03");
 
-    // The date the indicia or the catalogue gives is the book's.
-    let undated = read_answer(
-        true,
-        &[
-            ("title", "Astonishing Robot Tales", "front"),
-            ("issue_number", "1", "front"),
-        ],
-    );
-    let provider = Scripted::new(vec![
-        answered(undated),
-        researched(2),
-        answered(photo_structured(&[
-            ("cover_date", value("2024-05", 1, "high")),
-            ("release_date", value("2024-03-06", 2, "high")),
-        ])),
-        no_problems(),
-    ]);
-    let draft = run_covers(&provider, false).0.unwrap();
-    assert_eq!(draft.value("cover_date").unwrap().text, "2024-05");
+    // An older one keeps the indicia's or the catalogue's month, and
+    // takes the sale month only where no source dates it.
+    assert_eq!(dated("", "1985-02", "1985-03-20").text, "1985-02");
+    assert_eq!(dated("1983", "1983-08", "1983-05-10").text, "1983-08");
+    assert_eq!(dated("", "", "1994-03-17").text, "1994-03");
 
-    // A date the cover prints is kept.
-    let provider = Scripted::new(vec![
-        answered(robot_cover()),
-        researched(2),
-        answered(photo_structured(&[
-            ("cover_date", value("1954-03", 1, "high")),
-            ("release_date", value("1954-01-12", 2, "high")),
-        ])),
-        no_problems(),
-    ]);
-    let draft = run_covers(&provider, false).0.unwrap();
-    assert_eq!(draft.value("cover_date").unwrap().text, "1954-03");
+    // A month the cover prints is kept.
+    assert_eq!(dated("MAY", "2024-05", "2024-03-06").text, "2024-05");
+    assert_eq!(dated("Mar 1954", "1954-03", "1954-01-12").text, "1954-03");
 }
 
 #[test]

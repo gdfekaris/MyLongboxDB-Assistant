@@ -707,12 +707,21 @@ fn variant_name(draft: &mut Draft) {
     }
 }
 
-/// A book dated nowhere, on its cover, in its indicia, or in the
-/// catalogue, as many modern ones are, is dated by the month it was
-/// released, as the owner records it. A date the catalogue gives is kept:
-/// it is the one the indicia prints, or the month it supplies.
+/// The year from which a book whose cover prints no month is dated by
+/// the month it went on sale. Older books carried their date in the
+/// indicia, and the collection takes that, or the catalogue's month.
+const SALE_DATED_FROM: u16 = 2000;
+
+/// A cover date as the owner records it: the month the cover prints, or
+/// where it prints none, the month a modern book went on sale. An older
+/// book keeps the catalogue's date, and takes the sale month only when
+/// no source dates it at all.
 fn undated_cover(draft: &mut Draft, reading: &Reading) {
-    if draft.identity != Identity::Identified || reading.get("cover_date").is_some() {
+    if draft.identity != Identity::Identified
+        || reading
+            .get("cover_date")
+            .is_some_and(|s| prints_month(&s.text))
+    {
         return;
     }
     let Some(release) = draft
@@ -723,17 +732,30 @@ fn undated_cover(draft: &mut Draft, reading: &Reading) {
     else {
         return;
     };
+    let modern = release
+        .text
+        .get(..4)
+        .and_then(|y| y.parse::<u16>().ok())
+        .is_some_and(|y| y >= SALE_DATED_FROM);
     if let Some(value) = draft
         .values
         .iter_mut()
-        .find(|v| v.key == "cover_date" && v.text.is_empty())
+        .find(|v| v.key == "cover_date" && (modern || v.text.is_empty()))
     {
         value.text = release.text[..7].to_owned();
         value.source = release.source;
         value.confidence = release.confidence;
         value.accepted = release.accepted;
-        value.note = "your cover prints no date: the month it was released".into();
+        value.note = "your cover prints no month: the month it went on sale".into();
     }
+}
+
+/// Whether a date read from a cover gives its month, as in Mar 1954 or
+/// 3/54, not only a year.
+fn prints_month(printed: &str) -> bool {
+    printed.chars().any(|c| c.is_alphabetic())
+        || printed.chars().filter(char::is_ascii_digit).count() > 4
+        || printed.contains('/')
 }
 
 /// The issue number the research found is wanted only where the covers
