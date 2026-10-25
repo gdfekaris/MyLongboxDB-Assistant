@@ -18,8 +18,8 @@ const APP_ID: &str = "io.github.gdfekaris.MyLongboxDB.Assistant";
 
 fn main() {
     use_translations();
-    restrict_self();
-    relm4::RelmApp::new(APP_ID).run::<app::App>(());
+    let protections = restrict_self();
+    relm4::RelmApp::new(APP_ID).run::<app::App>(protections);
 }
 
 /// Points gettext at the translations installed beside the app, in
@@ -42,7 +42,7 @@ fn use_translations() {
 /// folders and connects over TCP only to port 443. The Flatpak sandbox
 /// already keeps it from the owner's files, so if an unusual kernel
 /// refuses a restriction, the app says so and carries on.
-fn restrict_self() {
+fn restrict_self() -> app::Protections {
     use gtk::glib;
     let (data, cache, config) = (
         glib::user_data_dir(),
@@ -57,12 +57,24 @@ fn restrict_self() {
     // /dev.
     let portal = glib::user_runtime_dir().join("doc");
     let devices = std::path::Path::new("/dev");
-    match assistant_sandbox::limit_access(&[&data, &cache, &config, &portal, devices]) {
-        Ok(assistant_sandbox::Enforced::Fully) => {}
-        Ok(level) => eprintln!("mylongboxdb-assistant: access limits enforced: {level:?}"),
-        Err(why) => eprintln!("mylongboxdb-assistant: could not limit access: {why}"),
-    }
-    if let Err(why) = assistant_sandbox::limit_sockets() {
-        eprintln!("mylongboxdb-assistant: could not limit sockets: {why}");
-    }
+    let files = match assistant_sandbox::limit_access(&[&data, &cache, &config, &portal, devices]) {
+        Ok(level) => {
+            if level != assistant_sandbox::Enforced::Fully {
+                eprintln!("mylongboxdb-assistant: access limits enforced: {level:?}");
+            }
+            level
+        }
+        Err(why) => {
+            eprintln!("mylongboxdb-assistant: could not limit access: {why}");
+            assistant_sandbox::Enforced::Not
+        }
+    };
+    let sockets = match assistant_sandbox::limit_sockets() {
+        Ok(()) => true,
+        Err(why) => {
+            eprintln!("mylongboxdb-assistant: could not limit sockets: {why}");
+            false
+        }
+    };
+    app::Protections { files, sockets }
 }

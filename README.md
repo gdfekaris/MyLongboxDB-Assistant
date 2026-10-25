@@ -152,7 +152,9 @@ authors. The list grows as the app is built.
   never listen for connections; and a seccomp filter that refuses
   sockets other than local, IPv4, and IPv6 ones, and io_uring.
   These hold even if other code in the app misbehaves, though not
-  against code that has taken over the whole process. Verify with
+  against code that has taken over the whole process. Where the kernel
+  cannot enforce one of them, the app says which at the top of its
+  window, and carries on inside the Flatpak sandbox. Verify with
   `cargo test -p assistant-sandbox`, whose tests apply each limit and
   try to break it. Kernels before Landlock ABI 4 cannot limit TCP; with
   `ASSISTANT_REQUIRE_LANDLOCK_NET=1` set, the test fails on such a

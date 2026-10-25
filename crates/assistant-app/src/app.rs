@@ -768,8 +768,51 @@ fn error_text(error: &KeyFileError) -> String {
     }
 }
 
+/// Which of the limits the app puts on itself at startup the kernel
+/// enforces. The Flatpak sandbox holds either way; these are a second
+/// wall, and the owner is told when part of it is missing.
+pub struct Protections {
+    pub files: assistant_sandbox::Enforced,
+    pub sockets: bool,
+}
+
+impl Protections {
+    /// What is missing, for the notice; empty when everything holds.
+    fn missing(&self) -> Vec<String> {
+        let mut missing = Vec::new();
+        match self.files {
+            assistant_sandbox::Enforced::Fully => {}
+            // Kernels before Landlock ABI 4 limit files but not ports.
+            assistant_sandbox::Enforced::Partly => {
+                missing.push(gettext("the limit on network ports"));
+            }
+            assistant_sandbox::Enforced::Not => {
+                missing.push(gettext("the limits on changing files and on network ports"));
+            }
+        }
+        if !self.sockets {
+            missing.push(gettext("the filter on kinds of network connection"));
+        }
+        missing
+    }
+
+    /// The notice to show, or none when everything holds.
+    fn notice(&self) -> Option<String> {
+        let missing = self.missing();
+        (!missing.is_empty()).then(|| {
+            // Translators: {missing} lists the protections the system
+            // lacks, such as "the limit on network ports".
+            gettext_f(
+                "This system does not support some of the app's own protections: {missing}. The Flatpak sandbox still applies.",
+                // Translators: joins two protections in the list above.
+                &[("missing", &missing.join(&gettext(" and ")))],
+            )
+        })
+    }
+}
+
 impl SimpleComponent for App {
-    type Init = ();
+    type Init = Protections;
     type Input = AppMsg;
     type Output = ();
     type Root = adw::ApplicationWindow;
@@ -784,7 +827,7 @@ impl SimpleComponent for App {
     }
 
     fn init(
-        _: Self::Init,
+        protections: Self::Init,
         window: Self::Root,
         sender: ComponentSender<Self>,
     ) -> ComponentParts<Self> {
@@ -839,7 +882,20 @@ impl SimpleComponent for App {
         stack.add_named(&run_page.root, Some("run"));
         stack.add_named(&review.root, Some("review"));
         let toasts = adw::ToastOverlay::new();
-        toasts.set_child(Some(&stack));
+        let notice = adw::Banner::builder()
+            .button_label(gettext("_Dismiss"))
+            .use_markup(false)
+            .build();
+        if let Some(text) = protections.notice() {
+            notice.set_title(&text);
+            notice.set_revealed(true);
+        }
+        notice.connect_button_clicked(|banner| banner.set_revealed(false));
+        let content = gtk::Box::new(gtk::Orientation::Vertical, 0);
+        content.append(&notice);
+        content.append(&stack);
+        stack.set_vexpand(true);
+        toasts.set_child(Some(&content));
         window.set_content(Some(&toasts));
 
         // Keys and clicks anywhere in the window count as use.
@@ -1304,5 +1360,36 @@ impl SimpleComponent for App {
                 self.show_setup();
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use assistant_sandbox::Enforced;
+
+    #[test]
+    fn the_owner_is_told_only_what_the_system_lacks() {
+        let all = Protections {
+            files: Enforced::Fully,
+            sockets: true,
+        };
+        assert_eq!(all.notice(), None);
+        let no_ports = Protections {
+            files: Enforced::Partly,
+            sockets: true,
+        };
+        let text = no_ports.notice().unwrap();
+        assert!(text.contains("the limit on network ports."), "{text}");
+        assert!(text.contains("Flatpak sandbox still applies"));
+        let neither = Protections {
+            files: Enforced::Not,
+            sockets: false,
+        };
+        let text = neither.notice().unwrap();
+        assert!(
+            text.contains("changing files and on network ports and the filter"),
+            "{text}"
+        );
     }
 }
