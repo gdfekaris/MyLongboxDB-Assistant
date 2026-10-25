@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc c0d9e8ed0f4b5ee2748f99a410e1e949eb2753c7e291c34a4ebcc52a0bd07cda # shrinks to file = "{\"version\":1,\"books\":[{\"included\":true,\"line\":1,\"series\":\"!\",\"start_year\":1954,\"volume\":null,\"number\":\"Σ\",\"identity\":\"identified\",\"candidates\":[],\"sources\":[],\"values\":[{\"key\":\"category\",\"text\":\"0  #\",\"source\":0,\"confidence\":\"high\",\"note\":\"\",\"accepted\":false}],\"credits\":[],\"characters\":[],\"teams\":[],\"story_arcs\":[],\"research\":\"\"}]}"
+cc ee99a9ac546007cd797a2def75c0e234fbfd6616c320472020b0887236f021a7 # shrinks to kind = Collects, text = "# 0#("

@@ -260,3 +260,49 @@ fn time_to_open() {
         params.memory_kib, params.passes, params.lanes
     );
 }
+
+mod properties {
+    use proptest::prelude::*;
+
+    use super::*;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(512))]
+
+        /// Any bytes are refused without a crash; random bytes almost never
+        /// get past the header, so this is quick.
+        #[test]
+        fn any_file_is_refused_safely(bytes in prop::collection::vec(any::<u8>(), 0..512)) {
+            let _ = open(&bytes, &passphrase("correct horse"));
+        }
+
+        /// What was decrypted is unpacked or refused, never a crash, and
+        /// only as valid keys.
+        #[test]
+        fn any_plaintext_is_unpacked_safely(bytes in prop::collection::vec(any::<u8>(), 0..512)) {
+            if let Ok(keys) = keys_from(&bytes) {
+                for key in [keys.anthropic, keys.openrouter].into_iter().flatten() {
+                    prop_assert!(ApiKey::new(key.expose().to_owned()).as_ref() == Some(&key));
+                }
+            }
+        }
+    }
+
+    proptest! {
+        // Each case derives a key at the minimum settings, 64 MiB.
+        #![proptest_config(ProptestConfig::with_cases(24))]
+
+        /// A sealed file with any bytes changed never opens.
+        #[test]
+        fn a_changed_file_never_opens(
+            edits in prop::collection::vec((any::<prop::sample::Index>(), 1..=255u8), 1..4),
+        ) {
+            let mut file = sealed();
+            for (at, flip) in edits {
+                let i = at.index(file.len());
+                file[i] ^= flip;
+            }
+            prop_assert!(open(&file, &passphrase("correct horse")).is_err());
+        }
+    }
+}

@@ -289,3 +289,44 @@ fn the_key_goes_only_in_its_header() {
     let body = request_body(&request()).unwrap().to_string();
     assert!(!body.contains("TESTONLY"));
 }
+
+mod properties {
+    use proptest::prelude::*;
+
+    use super::*;
+    use crate::arbitrary;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(512))]
+
+        /// Any answer body is read or refused, never a crash, and what
+        /// is read cites each page once and marks only pages it lists.
+        #[test]
+        fn any_answer_is_read_safely(body in arbitrary::body(), content in prop::collection::vec(arbitrary::json(), 0..6)) {
+            let response = Response { status: 200, retry_after: None, body };
+            if let Ok(raw) = parse::<RawMessage>(&response) {
+                let _ = Message::from_raw(raw);
+            }
+            let message = Message {
+                id: String::new(),
+                model: String::new(),
+                stop: Stop::EndTurn,
+                content,
+                usage: Usage::default(),
+            };
+            let pages = message.citations();
+            for (n, page) in pages.iter().enumerate() {
+                prop_assert!(pages[..n].iter().all(|p| p.url != page.url));
+            }
+            let _ = message.marked_text();
+            let _ = message.search_errors();
+        }
+
+        #[test]
+        fn any_model_list_gives_only_plain_ids(model in arbitrary::json()) {
+            if let Some(info) = model_info(&model) {
+                prop_assert!(plain_id(&info.id));
+            }
+        }
+    }
+}

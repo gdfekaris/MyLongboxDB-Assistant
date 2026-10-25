@@ -1039,3 +1039,116 @@ fn a_photo_book_costs_its_reading_more_than_a_line() {
     assert!(photo.likely > read_only.likely);
     assert!(photo.most > read_only.most);
 }
+
+mod properties {
+    //! Whatever the model sends, what reaches the draft has passed its
+    //! field's check, and every name is clean and cites a real source.
+
+    use proptest::prelude::*;
+
+    use super::*;
+
+    fn text() -> impl Strategy<Value = String> {
+        prop_oneof![
+            any::<String>(),
+            "[A-Za-z0-9 #$./,;:()\\-]{0,40}",
+            "(19|20)[0-9]{2}(-[0-1][0-9](-[0-3][0-9])?)?",
+        ]
+    }
+
+    /// A structured answer of the right shape, with arbitrary values,
+    /// sources, confidences, and lists.
+    fn shaped() -> impl Strategy<Value = String> {
+        let value = (
+            text(),
+            -2..5i64,
+            prop::sample::select(&["high", "medium", "low"][..]),
+        );
+        let named = (text(), -2..5i64, any::<prop::sample::Index>());
+        (
+            prop::collection::vec(value, FIELDS.len()),
+            prop::collection::vec(named, 0..12),
+            prop::collection::vec((text(), -2..5i64, any::<bool>()), 0..12),
+            prop::sample::select(&["identified", "ambiguous", "not_found"][..]),
+        )
+            .prop_map(|(values, credits, characters, status)| {
+                let mut answer = structured(&[]);
+                answer["identification"]["status"] = json!(status);
+                for (field, (text, source, confidence)) in FIELDS.iter().zip(values) {
+                    answer["fields"][field.key] = json!({"value": text, "source": source,
+                        "confidence": confidence, "note": ""});
+                }
+                answer["credits"] = credits
+                    .into_iter()
+                    .map(|(name, source, role)| {
+                        json!({"name": name, "role": role.get(Role::ALL).code(),
+                            "source": source, "confidence": "high"})
+                    })
+                    .collect();
+                answer["characters"] = characters
+                    .into_iter()
+                    .map(|(name, source, first)| {
+                        json!({"name": name, "first_appearance": first,
+                            "source": source, "confidence": "medium"})
+                    })
+                    .collect();
+                answer.to_string()
+            })
+    }
+
+    /// The full answer with a few bytes changed, removed, or added.
+    fn damaged() -> impl Strategy<Value = String> {
+        let valid = full_answer().to_string();
+        prop::collection::vec((any::<prop::sample::Index>(), any::<u8>(), 0..3u8), 1..8).prop_map(
+            move |edits| {
+                let mut bytes = valid.clone().into_bytes();
+                for (at, byte, how) in edits {
+                    let i = at.index(bytes.len() + 1);
+                    match how {
+                        0 if i < bytes.len() => bytes[i] = byte,
+                        1 if i < bytes.len() => {
+                            bytes.remove(i);
+                        }
+                        _ => bytes.insert(i, byte),
+                    }
+                }
+                String::from_utf8_lossy(&bytes).into_owned()
+            },
+        )
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(256))]
+
+        #[test]
+        fn only_checked_values_and_clean_names_reach_the_draft(
+            answer in prop_oneof![shaped(), damaged(), any::<String>()],
+        ) {
+            let provider = Scripted::new(vec![
+                researched(2),
+                Step::Answer(Reply { answer: Ok(answer), spent: spent(2) }),
+                no_problems(),
+            ]);
+            let Ok(draft) = run(&provider, "ART (1954) #1").0 else {
+                return Ok(());
+            };
+            for value in &draft.values {
+                let field = spec(value.key).expect("a known field");
+                if !value.text.is_empty() {
+                    prop_assert_eq!(
+                        check(field.kind, &value.text, YEAR),
+                        Ok(value.text.clone()),
+                        "{}", value.key
+                    );
+                }
+                prop_assert!(value.source.is_none_or(|s| s < draft.sources.len()));
+                prop_assert_eq!(&clean(&value.note, 1_000), &value.note);
+            }
+            for entry in draft.credits.iter().chain(&draft.characters) {
+                prop_assert!(!entry.name.is_empty());
+                prop_assert_eq!(&clean(&entry.name, 200), &entry.name);
+                prop_assert!(entry.source.is_some_and(|s| s < draft.sources.len()));
+            }
+        }
+    }
+}

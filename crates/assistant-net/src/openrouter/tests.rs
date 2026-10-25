@@ -189,3 +189,37 @@ fn the_key_goes_only_in_its_header() {
             .contains("TESTONLY")
     );
 }
+
+mod properties {
+    use proptest::prelude::*;
+
+    use super::*;
+    use crate::arbitrary;
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(512))]
+
+        #[test]
+        fn any_answer_is_read_safely(body in arbitrary::body()) {
+            let response = Response { status: 200, retry_after: None, body };
+            if let Ok(answer) = answer(&response, "sk-or-v1-TESTONLY") {
+                for (n, page) in answer.citations.iter().enumerate() {
+                    prop_assert!(answer.citations[..n].iter().all(|p| p.url != page.url));
+                }
+                if let Some(cost) = answer.usage.cost {
+                    prop_assert!(cost.0 >= 0);
+                }
+            }
+        }
+
+        #[test]
+        fn any_model_list_gives_only_plain_ids_and_real_prices(model in arbitrary::json()) {
+            if let Some(info) = model_info(&model) {
+                prop_assert!(plain_id(&info.id));
+                for price in [info.prompt_price, info.completion_price, info.image_price, info.web_search_price].into_iter().flatten() {
+                    prop_assert!(price.0 >= 0);
+                }
+            }
+        }
+    }
+}
