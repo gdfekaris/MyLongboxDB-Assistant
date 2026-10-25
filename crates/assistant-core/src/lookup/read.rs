@@ -90,6 +90,11 @@ const ITEMS: &[(&str, &str, &str)] = &[
     ),
     ("isbn", "ISBN", "The ISBN as printed, usually on the back."),
     (
+        "grading_label",
+        "grading label",
+        "Everything printed on a grading company's label, such as CGC or CBCS, if the book is in a graded case: title, number, date, printing, and notes; blank if there is none.",
+    ),
+    (
         "cover_artist",
         "cover artist's signature",
         "A signature legible on the cover art.",
@@ -212,7 +217,23 @@ impl Reading {
         self.seen.iter().find(|s| s.key == key)
     }
 
-    /// The book to look up, or why the covers do not name one.
+    /// The issue number the covers print, or failing that a grading
+    /// label's, which the grading company printed from the book itself.
+    pub fn printed_number(&self) -> Option<IssueNumber> {
+        let printed = self
+            .get("issue_number")
+            .map(|s| issue_number(&s.text))
+            .filter(|n| !n.is_empty())
+            .or_else(|| {
+                self.get("grading_label")
+                    .and_then(|s| label_number(&s.text))
+            })?;
+        IssueNumber::new(&printed).ok()
+    }
+
+    /// The book to look up, or why the covers do not name one. A book
+    /// whose number is printed nowhere is looked up by its other details,
+    /// as nn until the research finds its number.
     pub fn query(&self, line: usize) -> Result<BookQuery, String> {
         if !self.is_cover {
             return Err("the photo does not show a book's cover".into());
@@ -221,12 +242,10 @@ impl Reading {
             .get("title")
             .map(|s| s.text.clone())
             .ok_or("no title could be read on the cover")?;
-        let number = self
-            .get("issue_number")
-            .map(|s| issue_number(&s.text))
-            .filter(|n| !n.is_empty())
-            .ok_or("no issue number could be read on the cover")?;
-        let number = IssueNumber::new(&number).map_err(|e| e.to_string())?;
+        let number = match self.printed_number() {
+            Some(number) => number,
+            None => IssueNumber::new("nn").map_err(|e| e.to_string())?,
+        };
         let volume = self.get("volume").and_then(|s| {
             let digits: String = s.text.chars().filter(char::is_ascii_digit).collect();
             digits.parse::<u32>().ok().filter(|v| *v >= 1)
@@ -274,6 +293,17 @@ impl Reading {
     }
 }
 
+/// The number a grading label gives after its title, as in
+/// "Teenage Mutant Ninja Turtles #1 Mirage Studios, 2/85".
+fn label_number(label: &str) -> Option<String> {
+    let after = label.split_once('#')?.1;
+    let number: String = after
+        .chars()
+        .take_while(|c| !c.is_whitespace() && *c != ',')
+        .collect();
+    (!number.is_empty()).then_some(number)
+}
+
 /// An issue number as printed, without the marks that only label it.
 fn issue_number(printed: &str) -> String {
     let mut text = printed.trim();
@@ -295,5 +325,18 @@ mod tests {
         assert_eq!(issue_number("No. 7"), "7");
         assert_eq!(issue_number("Annual 3"), "Annual 3");
         assert_eq!(issue_number(" # 1/2 "), "1/2");
+    }
+
+    #[test]
+    fn a_grading_label_gives_the_number_after_the_title() {
+        assert_eq!(
+            label_number("Teenage Mutant Ninja Turtles #1 Mirage Studios, 2/85").as_deref(),
+            Some("1")
+        );
+        assert_eq!(
+            label_number("Spider-Man #1/2, 12/98").as_deref(),
+            Some("1/2")
+        );
+        assert_eq!(label_number("Marvel Treasury Special nn"), None);
     }
 }

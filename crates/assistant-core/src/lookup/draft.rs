@@ -189,7 +189,13 @@ impl Draft {
                 get("magazine_format").and_then(|f| MagazineFormat::from_code(&f));
             book.series.black_and_white = get("black_and_white").map(|b| b == "yes");
         }
-        book.issue.number = Some(self.query.number.clone());
+        // A number found for a book whose covers print none, once the
+        // owner accepts it; otherwise the number the book was looked up by.
+        book.issue.number = Some(
+            get("issue_number")
+                .and_then(|n| crate::issue_number::IssueNumber::new(&n).ok())
+                .unwrap_or_else(|| self.query.number.clone()),
+        );
         book.issue.legacy_number = number("legacy_number");
         book.issue.title = get("story_title").unwrap_or_default();
         book.issue.cover_date = get("cover_date").and_then(|d| {

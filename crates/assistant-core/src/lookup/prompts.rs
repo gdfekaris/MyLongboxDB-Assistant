@@ -5,7 +5,7 @@
 use super::fields::FIELDS;
 
 /// Raised with every change to the texts below.
-pub const PROMPT_VERSION: &str = "2026-10-24.6";
+pub const PROMPT_VERSION: &str = "2026-10-24.7";
 
 /// The read step, for photos: what is printed on the covers, and nothing
 /// looked up or remembered. The items to report follow it.
@@ -83,6 +83,11 @@ cover if it is one, and whether it is a direct or newsstand copy. The \
 cover's own text outranks a web page about another edition. If the \
 cover's title, number, or date fits no published issue, say so rather \
 than choosing the nearest.
+- A grading label on a graded case was printed by the grading company, \
+not on the cover: use what it says to find the issue and its printing.
+- Where the cover prints no issue number, find the issue from its other \
+details and report its number as issue_number; a one-shot published \
+without a number has none, reported as nn.
 ";
 
 /// The structuring step: turn the research notes into the schema's JSON,

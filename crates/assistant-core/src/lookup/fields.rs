@@ -92,6 +92,14 @@ pub const FIELDS: &[Field] = &[
         Kind::Year,
         "The year the series' first issue came out, as in 'Amazing Spider-Man (1963)'.",
     ),
+    // Asked only of a book from photos, and kept only where its covers
+    // print no number.
+    edition(
+        "issue_number",
+        "Issue number",
+        Kind::Text,
+        "Only when the cover prints no number: the issue's number as the catalogue gives it, without # or No., such as 485 or 1/2; nn for a book published without one.",
+    ),
     field(
         "volume",
         "Volume",

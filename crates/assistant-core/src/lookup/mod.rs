@@ -276,12 +276,13 @@ fn reply<T>(reply: Reply<T>, spent: &mut Spent) -> Result<T, LookupError> {
     reply.answer.map_err(LookupError::Failed)
 }
 
-/// The owner's book as the steps are told it.
-fn describe(query: &BookQuery, from_cover: bool) -> String {
+/// The owner's book as the steps are told it, with what was read from its
+/// covers if it came as photos.
+fn describe(query: &BookQuery, reading: Option<&Reading>) -> String {
     let unknown = "not given";
     // A cover's title is often not the series' catalogued name, so it is
     // not given as a name the owner chose.
-    let (named, series) = if from_cover {
+    let (named, series) = if reading.is_some() {
         (
             "The owner's cover shows this book",
             "Title, as the cover prints it",
@@ -289,12 +290,19 @@ fn describe(query: &BookQuery, from_cover: bool) -> String {
     } else {
         ("The owner named this book", "Series, as they wrote it")
     };
+    let number = match reading {
+        Some(r) if r.printed_number().is_none() => {
+            "not printed on the cover: find it from the other details, such as a grading \
+             label, the date, or the price; a book published without a number has none, nn"
+                .to_owned()
+        }
+        _ => query.number.to_string(),
+    };
     format!(
-        "{named}: {query}\n{series}: {}\nStart year: {}\nVolume: {}\nIssue number: {}\n",
+        "{named}: {query}\n{series}: {}\nStart year: {}\nVolume: {}\nIssue number: {number}\n",
         query.series,
         query.start_year.map_or(unknown.into(), |y| y.to_string()),
         query.volume.map_or(unknown.into(), |v| v.to_string()),
-        query.number,
     )
 }
 
@@ -653,12 +661,40 @@ pub fn look_up_covers(
     let mut draft = look_up_from(provider, &query, Some(&reading), settings, cancel, spent)?;
     compare_barcodes(&mut draft, &reading);
     first_printing(&mut draft, &reading);
+    printed_number(&mut draft, &reading);
     Ok(draft)
 }
 
-/// Holds the barcode to the one read from the cover, whose check digit
-/// shows it was read right: a different one found online is doubted,
-/// and a missing one is taken from the cover.
+/// The issue number the research found is wanted only where the covers
+/// print none; a number they print is the book's. A found number says
+/// which book this is, so the owner confirms it before it is exported.
+fn printed_number(draft: &mut Draft, reading: &Reading) {
+    if reading.printed_number().is_none() {
+        if let Some(value) = draft
+            .values
+            .iter_mut()
+            .find(|v| v.key == "issue_number" && !v.text.is_empty())
+        {
+            value.accepted = false;
+            value.note = format!(
+                "not printed on your cover; {}",
+                if value.note.is_empty() {
+                    "check it before the export"
+                } else {
+                    &value.note
+                }
+            );
+        }
+        return;
+    }
+    if let Some(value) = draft.values.iter_mut().find(|v| v.key == "issue_number") {
+        value.text.clear();
+        value.source = None;
+        value.accepted = false;
+        value.note = "printed on your cover".into();
+    }
+}
+
 /// A cover that marks no later printing is a first printing, as the
 /// owner records it, unless the research found otherwise.
 fn first_printing(draft: &mut Draft, reading: &Reading) {
@@ -678,6 +714,9 @@ fn first_printing(draft: &mut Draft, reading: &Reading) {
     }
 }
 
+/// Holds the barcode to the one read from the cover, whose check digit
+/// shows it was read right: a different one found online is doubted,
+/// and a missing one is taken from the cover.
 fn compare_barcodes(draft: &mut Draft, reading: &Reading) {
     if draft.identity != Identity::Identified {
         return;
@@ -737,7 +776,7 @@ fn look_up_from(
                     prompts::REPORT,
                     prompts::field_list(from_text)
                 ),
-                user: format!("{}{cover}", describe(query, !from_text)),
+                user: format!("{}{cover}", describe(query, reading)),
                 max_searches: settings.max_searches,
                 effort: settings.effort,
                 max_tokens: RESEARCH_TOKENS,
@@ -777,7 +816,7 @@ fn look_up_from(
                 name: "book",
                 system: format!("{}{}", prompts::STRUCTURE, prompts::field_list(from_text)),
                 images: Vec::new(),
-                user: format!("{}\n{}", describe(query, !from_text), notes(&research)),
+                user: format!("{}\n{}", describe(query, reading), notes(&research)),
                 schema: schema::structure(from_text),
                 effort: settings.effort,
                 max_tokens: STRUCTURE_TOKENS,
@@ -800,7 +839,7 @@ fn look_up_from(
             images: Vec::new(),
             user: format!(
                 "{}\n{}\n{}",
-                describe(query, !from_text),
+                describe(query, reading),
                 checked_values(&draft),
                 notes(&research)
             ),

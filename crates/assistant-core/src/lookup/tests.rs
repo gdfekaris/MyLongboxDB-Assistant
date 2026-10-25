@@ -699,10 +699,6 @@ fn covers_that_name_no_book_go_no_further() {
             read_answer(true, &[("issue_number", "1", "front")]),
             "no title",
         ),
-        (
-            read_answer(true, &[("title", "Astonishing Robot Tales", "front")]),
-            "no issue number",
-        ),
     ] {
         let provider = Scripted::new(vec![answered(reading)]);
         let (result, spent) = run_covers(&provider, false);
@@ -714,6 +710,80 @@ fn covers_that_name_no_book_go_no_further() {
         assert_eq!(spent.cost, Picodollars(2 * 10_000_000_000));
         assert!(provider.research_asked.borrow().is_empty());
     }
+}
+
+#[test]
+fn a_cover_without_a_number_is_looked_up_by_its_other_details() {
+    let unnumbered = read_answer(
+        true,
+        &[
+            ("title", "Astonishing Robot Tales", "front"),
+            ("cover_date", "March 1954", "front"),
+        ],
+    );
+    let provider = Scripted::new(vec![
+        answered(unnumbered),
+        researched(2),
+        answered(photo_structured(&[("issue_number", value("4", 1, "high"))])),
+        no_problems(),
+    ]);
+    let draft = run_covers(&provider, false).0.unwrap();
+    assert_eq!(draft.query.number.as_str(), "nn");
+    // The research is told the number is not printed.
+    let research = &provider.research_asked.borrow()[0];
+    assert!(research.user.contains("not printed on the cover"));
+    // The number found waits for the owner, and is the export's once
+    // they accept it.
+    let found = draft.value("issue_number").unwrap();
+    assert_eq!(found.text, "4");
+    assert!(!found.accepted);
+    assert!(found.note.contains("not printed on your cover"));
+    assert_eq!(
+        draft.book(YEAR).unwrap().issue.number.unwrap().as_str(),
+        "nn"
+    );
+    let mut accepted = draft.clone();
+    // The owner ticks it.
+    for v in accepted
+        .values
+        .iter_mut()
+        .filter(|v| v.key == "issue_number")
+    {
+        v.accepted = true;
+    }
+    assert_eq!(
+        accepted.book(YEAR).unwrap().issue.number.unwrap().as_str(),
+        "4"
+    );
+}
+
+#[test]
+fn a_grading_label_gives_the_number_the_cover_does_not() {
+    let slabbed = read_answer(
+        true,
+        &[
+            ("title", "Astonishing Robot Tales", "front"),
+            (
+                "grading_label",
+                "CGC 9.2 Astonishing Robot Tales #3 Atomic Age, 5/54",
+                "front, label",
+            ),
+        ],
+    );
+    let provider = Scripted::new(vec![
+        answered(slabbed),
+        researched(2),
+        // A number the research gives anyway is not wanted.
+        answered(photo_structured(&[("issue_number", value("4", 1, "high"))])),
+        no_problems(),
+    ]);
+    let draft = run_covers(&provider, false).0.unwrap();
+    assert_eq!(draft.query.number.as_str(), "3");
+    assert_eq!(draft.value("issue_number").unwrap().text, "");
+    assert_eq!(
+        draft.book(YEAR).unwrap().issue.number.unwrap().as_str(),
+        "3"
+    );
 }
 
 #[test]
