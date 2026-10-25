@@ -339,6 +339,8 @@ fn model_page(
         .title(gettext("Model"))
         .model(&strings)
         .build();
+    // Model names come from the provider.
+    combo.set_use_markup(false);
     let preferred = models
         .iter()
         .position(|m| m.id == DEFAULT_MODEL || m.id.ends_with("claude-opus-5.5"))

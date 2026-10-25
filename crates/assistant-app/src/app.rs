@@ -157,8 +157,12 @@ pub struct App {
 }
 
 impl App {
+    /// Shows `text` briefly. It is plain text, not markup: it can quote
+    /// error messages and file contents, whose `<` or `&` must show as
+    /// written.
     fn toast(&self, text: &str) {
-        self.toasts.add_toast(adw::Toast::new(text));
+        self.toasts
+            .add_toast(adw::Toast::builder().title(text).use_markup(false).build());
     }
 
     fn show_setup(&self) {
