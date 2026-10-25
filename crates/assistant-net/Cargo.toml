@@ -21,3 +21,6 @@ serde = { version = "1.0.229", features = ["derive"] }
 # Keeps a schema's properties in their order when the request is sent.
 serde_json = { version = "1.0.154", features = ["preserve_order"] }
 zeroize = "1.9.1"
+
+[dev-dependencies]
+proptest = { version = "1.12.0", default-features = false, features = ["std"] }
