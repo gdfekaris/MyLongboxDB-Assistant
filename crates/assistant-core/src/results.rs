@@ -72,6 +72,15 @@ impl ReviewBook {
         }
     }
 
+    /// The book as it goes into the export: what the owner accepted, with
+    /// their photos as its covers. `None` for a book not identified.
+    pub fn book(&self, this_year: u16) -> Option<crate::model::Book> {
+        let mut book = self.draft.book(this_year)?;
+        book.front = self.front.as_ref().map(|p| p.jpeg.clone());
+        book.back = self.back.as_ref().map(|p| p.jpeg.clone());
+        Some(book)
+    }
+
     /// A new result looked up from these photos.
     pub fn with_photos(draft: Draft, front: Photo, back: Option<Photo>) -> Self {
         Self {

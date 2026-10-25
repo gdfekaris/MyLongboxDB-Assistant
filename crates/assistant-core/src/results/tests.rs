@@ -213,6 +213,20 @@ fn photos_are_kept_beside_the_results_and_go_with_their_book() {
 }
 
 #[test]
+fn the_owner_s_photos_are_the_exported_book_s_covers() {
+    let typed = ReviewBook::new(draft());
+    assert_eq!(typed.book(YEAR).unwrap().front, None);
+    let photographed =
+        ReviewBook::with_photos(draft(), Photo::new(jpeg(1)), Some(Photo::new(jpeg(2))));
+    let book = photographed.book(YEAR).unwrap();
+    assert_eq!(book.front, Some(jpeg(1)));
+    assert_eq!(book.back, Some(jpeg(2)));
+    let mut unsettled = photographed.clone();
+    unsettled.draft.identity = Identity::NotFound;
+    assert_eq!(unsettled.book(YEAR), None);
+}
+
+#[test]
 fn a_photo_name_cannot_reach_outside_its_folder() {
     let dir = folder("photo-names");
     let path = dir.join("results.json");

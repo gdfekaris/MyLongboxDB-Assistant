@@ -400,7 +400,7 @@ impl App {
         let mut refused = Vec::new();
         let mut books = Vec::new();
         for b in &included {
-            let Some(book) = b.draft.book(year) else {
+            let Some(book) = b.book(year) else {
                 continue;
             };
             if let Some(problem) = book.problems().into_iter().next() {
