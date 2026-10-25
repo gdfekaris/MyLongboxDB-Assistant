@@ -635,12 +635,32 @@ pub fn look_up_covers(
     }
     let mut draft = look_up_from(provider, &query, Some(&reading), settings, cancel, spent)?;
     compare_barcodes(&mut draft, &reading);
+    first_printing(&mut draft, &reading);
     Ok(draft)
 }
 
 /// Holds the barcode to the one read from the cover, whose check digit
 /// shows it was read right: a different one found online is doubted,
 /// and a missing one is taken from the cover.
+/// A cover that marks no later printing is a first printing, as the
+/// owner records it, unless the research found otherwise.
+fn first_printing(draft: &mut Draft, reading: &Reading) {
+    if draft.identity != Identity::Identified || reading.get("printing").is_some() {
+        return;
+    }
+    if let Some(value) = draft
+        .values
+        .iter_mut()
+        .find(|v| v.key == "printing" && v.text.is_empty())
+    {
+        value.text = "1".into();
+        value.source = None;
+        value.confidence = Confidence::Medium;
+        value.accepted = true;
+        value.note = "your cover marks no later printing".into();
+    }
+}
+
 fn compare_barcodes(draft: &mut Draft, reading: &Reading) {
     if draft.identity != Identity::Identified {
         return;
@@ -799,6 +819,9 @@ fn look_up_from(
                 }
             }
         }
+    }
+    for value in &mut draft.values {
+        value.text = fields::house_style(value.key, &value.text);
     }
     Ok(draft)
 }

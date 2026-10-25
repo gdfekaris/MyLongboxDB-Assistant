@@ -84,7 +84,7 @@ pub const FIELDS: &[Field] = &[
         "series",
         "Series",
         Kind::Text,
-        "The series' name as the Grand Comics Database or the publisher gives it, without its year or volume.",
+        "The series' name as the Grand Comics Database or the publisher gives it, without its year or volume, and without a leading The.",
     ),
     field(
         "start_year",
@@ -96,13 +96,13 @@ pub const FIELDS: &[Field] = &[
         "volume",
         "Volume",
         Kind::Ordinal,
-        "The volume number, only where the series is commonly told apart by volume.",
+        "The volume number, only where the publisher itself numbers the series as a volume, such as Vol. 2 in the indicia; blank otherwise, as the start year tells series apart.",
     ),
     field(
         "publisher",
         "Publisher",
         Kind::Text,
-        "The publisher, such as Marvel or DC.",
+        "The publisher by its short name: Marvel Comics, Archie Comics, and otherwise the brand alone, such as DC, Image, Dark Horse, or IDW.",
     ),
     field(
         "imprint",
@@ -216,19 +216,25 @@ pub const FIELDS: &[Field] = &[
         "variant",
         "Variant",
         Kind::Text,
-        "The cover variant, such as Cover B; blank for the standard cover.",
+        "The cover variant's name. A named edition comes first: an event, store, or convention exclusive such as SDCC 1995 Convention variant or FCBD 2024, a finish such as platinum cover or foil, a ratio such as 1:25 ratio variant, or a lettered cover such as Cover B. Otherwise, for a cover by another artist, the artist's surname and cover, such as Okazaki cover. Blank for the standard cover.",
+    ),
+    edition(
+        "variant_cover_artists",
+        "Variant cover artists",
+        Kind::Text,
+        "For a variant cover only: who drew it, full names separated by semicolons; blank for the standard cover.",
     ),
     edition(
         "printing",
         "Printing",
         Kind::Ordinal,
-        "Which printing, such as 2 for a second printing.",
+        "Which printing, such as 2 for a second printing, or 1 for the first.",
     ),
     edition(
         "distribution",
         "Distribution",
         Kind::Distribution,
-        "direct or newsstand.",
+        "direct or newsstand. A picture, logo, or Direct Edition in the barcode box means direct; a plain barcode on a US comic from before about 2000 means newsstand; later copies are direct unless marked newsstand.",
     ),
     edition(
         "published",
@@ -243,6 +249,31 @@ pub const FIELDS: &[Field] = &[
         "The digits under the barcode, add-on included.",
     ),
 ];
+
+/// A value as the owner's collection writes it: series without a leading
+/// The, and publishers by the names the collection already uses. Applied
+/// after the check, which compares values with their sources' own words.
+pub(crate) fn house_style(key: &str, text: &str) -> String {
+    let text = text.trim();
+    match key {
+        "series" => match text.get(..4) {
+            Some(the) if the.eq_ignore_ascii_case("the ") && text.len() > 4 => {
+                text[4..].trim_start().to_owned()
+            }
+            _ => text.to_owned(),
+        },
+        "publisher" => match text.to_lowercase().as_str() {
+            "marvel" | "marvel comics" | "marvel comics group" => "Marvel Comics".into(),
+            "dc comics" => "DC".into(),
+            "image comics" => "Image".into(),
+            "dark horse comics" => "Dark Horse".into(),
+            "idw publishing" => "IDW".into(),
+            "archie" | "archie comic publications" => "Archie Comics".into(),
+            _ => text.to_owned(),
+        },
+        _ => text.to_owned(),
+    }
+}
 
 /// The field with this key.
 pub fn spec(key: &str) -> Option<&'static Field> {
@@ -366,6 +397,26 @@ mod tests {
     use super::*;
 
     const YEAR: u16 = 2026;
+
+    #[test]
+    fn values_are_named_as_the_owner_s_collection_names_them() {
+        assert_eq!(house_style("series", "The Transformers"), "Transformers");
+        assert_eq!(
+            house_style("series", "the Spectacular Spider-Men"),
+            "Spectacular Spider-Men"
+        );
+        assert_eq!(house_style("series", "Theatre of Fear"), "Theatre of Fear");
+        assert_eq!(house_style("series", "The"), "The");
+        assert_eq!(house_style("publisher", "Marvel"), "Marvel Comics");
+        assert_eq!(
+            house_style("publisher", "Marvel Comics Group"),
+            "Marvel Comics"
+        );
+        assert_eq!(house_style("publisher", "DC Comics"), "DC");
+        assert_eq!(house_style("publisher", "Image Comics"), "Image");
+        assert_eq!(house_style("publisher", "Fantagraphics"), "Fantagraphics");
+        assert_eq!(house_style("story_title", "The End"), "The End");
+    }
 
     #[test]
     fn keys_are_unique() {

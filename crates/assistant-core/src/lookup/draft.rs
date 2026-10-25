@@ -174,7 +174,8 @@ impl Draft {
         let category = get("category")
             .and_then(|c| Category::from_code(&c))
             .unwrap_or(Category::Comic);
-        let series = get("series").unwrap_or_else(|| self.query.series.clone());
+        let series = get("series")
+            .unwrap_or_else(|| super::fields::house_style("series", &self.query.series));
         let mut book = Book::new(category, series);
         book.series.start_year = get("start_year")
             .and_then(|y| y.parse().ok())
@@ -218,6 +219,18 @@ impl Draft {
         book.edition.canadian_cover_price_cents =
             get("canadian_cover_price").and_then(|p| parse_cents(&p).ok());
         book.edition.variant = get("variant").unwrap_or_default();
+        if !book.edition.variant.is_empty() {
+            book.edition.cover_artists = get("variant_cover_artists")
+                .map(|names| {
+                    names
+                        .split(';')
+                        .map(str::trim)
+                        .filter(|n| !n.is_empty())
+                        .map(str::to_owned)
+                        .collect()
+                })
+                .unwrap_or_default();
+        }
         book.edition.printing = number("printing");
         book.edition.distribution = get("distribution").and_then(|d| Distribution::from_code(&d));
         book.edition.published = get("published").and_then(|p| p.parse::<PartialDate>().ok());

@@ -561,6 +561,59 @@ fn the_cover_is_read_and_then_looked_up_like_a_line() {
 }
 
 #[test]
+fn photo_books_follow_the_owner_s_conventions() {
+    let provider = Scripted::new(vec![
+        answered(robot_cover()),
+        researched(2),
+        answered(photo_structured(&[
+            ("series", value("The Astonishing Robot Tales", 7, "high")),
+            ("publisher", value("Marvel", 7, "high")),
+            ("variant", value("Okazaki cover", 8, "high")),
+            (
+                "variant_cover_artists",
+                value("Takashi Okazaki; Ada Sprocket", 8, "high"),
+            ),
+        ])),
+        no_problems(),
+    ]);
+    let draft = run_covers(&provider, false).0.unwrap();
+    let v = |key| draft.value(key).unwrap().clone();
+    assert_eq!(v("series").text, "Astonishing Robot Tales");
+    assert_eq!(v("publisher").text, "Marvel Comics");
+    // No later printing is marked on the cover, so it is the first.
+    assert_eq!(v("printing").text, "1");
+    assert!(v("printing").accepted);
+    assert_eq!(v("printing").source, None);
+    let book = draft.book(YEAR).unwrap();
+    assert_eq!(book.series.name, "Astonishing Robot Tales");
+    assert_eq!(book.edition.printing, Some(1));
+    assert_eq!(
+        book.edition.cover_artists,
+        ["Takashi Okazaki", "Ada Sprocket"]
+    );
+}
+
+#[test]
+fn a_printing_marked_on_the_cover_is_not_taken_as_the_first() {
+    let second = read_answer(
+        true,
+        &[
+            ("title", "Astonishing Robot Tales", "front"),
+            ("issue_number", "1", "front"),
+            ("printing", "2nd Printing", "front, top"),
+        ],
+    );
+    let provider = Scripted::new(vec![
+        answered(second),
+        researched(1),
+        answered(photo_structured(&[])),
+        no_problems(),
+    ]);
+    let draft = run_covers(&provider, false).0.unwrap();
+    assert_eq!(draft.value("printing").unwrap().text, "");
+}
+
+#[test]
 fn a_barcode_found_online_that_differs_from_the_cover_is_doubted() {
     let provider = Scripted::new(vec![
         answered(robot_cover()),
