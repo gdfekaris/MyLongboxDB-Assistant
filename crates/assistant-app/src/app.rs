@@ -9,7 +9,7 @@ use adw::prelude::*;
 use assistant_core::cost::{Estimate, anthropic_price, dollars};
 use assistant_core::lookup::{Draft, Settings as LookupSettings};
 use assistant_core::queue::{self, Event, Item, RunOptions, Summary};
-use assistant_core::results::{self, ReviewBook};
+use assistant_core::results::{self, Photo, ReviewBook};
 use assistant_core::write_export;
 use assistant_keys::{ApiKey, ApiKeys, KdfParams, KeyFileError, Passphrase, save, seal};
 use assistant_net::Client;
@@ -1097,11 +1097,26 @@ impl SimpleComponent for App {
                 let _ = self.config.save(&config::path());
             }
             AppMsg::LookUp => {
-                let (books, problems) = self.add.parsed(this_year());
-                if books.is_empty() || !problems.is_empty() || books.len() > self.config.batch {
+                if !self.add.ready() {
                     return;
                 }
-                self.pending = books.into_iter().map(Book::line).collect();
+                let (lines, _) = self.add.parsed(this_year());
+                let mut books: Vec<Book> = lines.into_iter().map(Book::line).collect();
+                books.extend(self.add.photo_books().into_iter().map(|b| {
+                    let mut sizes = vec![b.front.size];
+                    sizes.extend(b.back.as_ref().map(|p| p.size));
+                    Book::photos(
+                        b.label(),
+                        Photo::new(b.front.jpeg.clone()),
+                        b.back.as_ref().map(|p| Photo::new(p.jpeg.clone())),
+                        sizes,
+                        None,
+                    )
+                }));
+                if books.len() > self.config.batch {
+                    return;
+                }
+                self.pending = books;
                 self.replacing = None;
                 self.ask_to_run();
             }

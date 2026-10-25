@@ -37,6 +37,7 @@ version = "0.1.0"
 dependencies = [
  "assistant-core",
  "assistant-keys",
+ "assistant-media",
  "assistant-net",
  "assistant-sandbox",
  "gtk4",
