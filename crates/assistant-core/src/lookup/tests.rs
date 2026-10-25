@@ -772,6 +772,34 @@ fn a_cover_without_a_number_is_looked_up_by_its_other_details() {
 }
 
 #[test]
+fn a_series_is_named_without_the_year_in_its_title() {
+    let series = |name: &str, start: &str| {
+        let provider = Scripted::new(vec![
+            answered(robot_cover()),
+            researched(2),
+            answered(photo_structured(&[
+                ("series", value(name, 1, "high")),
+                ("start_year", value(start, 1, "high")),
+            ])),
+            no_problems(),
+        ]);
+        let draft = run_covers(&provider, false).0.unwrap();
+        draft.value("series").unwrap().text.clone()
+    };
+    assert_eq!(
+        series(
+            "Free Comic Book Day 2024: Ultimate Universe/Spider-Man",
+            "2024"
+        ),
+        "Free Comic Book Day: Ultimate Universe/Spider-Man"
+    );
+    assert_eq!(series("Robot Tales 1954", "1954"), "Robot Tales");
+    // A number in the title that is not its year stays.
+    assert_eq!(series("Spider-Man 2099", "1992"), "Spider-Man 2099");
+    assert_eq!(series("1954", "1954"), "1954");
+}
+
+#[test]
 fn an_annual_is_its_own_series() {
     let annual = read_answer(
         true,

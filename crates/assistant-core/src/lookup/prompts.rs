@@ -5,7 +5,7 @@
 use super::fields::FIELDS;
 
 /// Raised with every change to the texts below.
-pub const PROMPT_VERSION: &str = "2026-10-25.3";
+pub const PROMPT_VERSION: &str = "2026-10-25.4";
 
 /// The read step, for photos: what is printed on the covers, and nothing
 /// looked up or remembered. The items to report follow it.
@@ -59,7 +59,11 @@ who pencilled and who inked; never split such a credit yourself.
 - For each role give only the main credit: leave out assistants, \
 assistant and associate editors, and anyone credited only for layouts, \
 breakdowns, finishes, or plot help. Name more than one person in a role \
-only where the issue credits them as equals.
+only where the issue credits them as equals; where you cannot tell, \
+give the one credited first. The cover is the exception: its artists \
+are everyone who drew it, its penciller and its inker both.
+- For an issue with several stories, such as an anthology or a flip \
+book, report the lead story's title, credits, and characters only.
 - Name each creator as the issue credited them at the time. Where a \
 source gives a later name beside the credited one, as in Christopher \
 Priest [as Jim Owsley], use the credited name, Jim Owsley.

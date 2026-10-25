@@ -976,6 +976,7 @@ fn look_up_from(
     }
     annual_series(&mut draft);
     year_only_date(&mut draft);
+    titled_year(&mut draft);
     Ok(draft)
 }
 
@@ -992,6 +993,39 @@ fn year_only_date(draft: &mut Draft) {
         if value.note.is_empty() {
             value.note = "only the year was found: add the month if the book gives one".into();
         }
+    }
+}
+
+/// A series titled with its year, as Free Comic Book Day 2024 is, is
+/// named without it in the collection, whose start year holds it.
+fn titled_year(draft: &mut Draft) {
+    let Some(year) = draft
+        .values
+        .iter()
+        .find(|v| v.key == "start_year" && v.text.len() == 4)
+        .map(|v| v.text.clone())
+    else {
+        return;
+    };
+    let Some(series) = draft.values.iter_mut().find(|v| v.key == "series") else {
+        return;
+    };
+    let mut words: Vec<String> = Vec::new();
+    for word in series.text.split_whitespace() {
+        match word.strip_prefix(year.as_str()) {
+            Some(rest) if rest.is_empty() || rest == ":" || rest == "," => {
+                if let Some(last) = words.last_mut() {
+                    last.push_str(rest);
+                } else {
+                    words.push(word.to_owned());
+                }
+            }
+            _ => words.push(word.to_owned()),
+        }
+    }
+    let named = words.join(" ");
+    if named.chars().any(char::is_alphabetic) {
+        series.text = named;
     }
 }
 

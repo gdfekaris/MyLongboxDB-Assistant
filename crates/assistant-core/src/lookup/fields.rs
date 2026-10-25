@@ -84,13 +84,13 @@ pub const FIELDS: &[Field] = &[
         "series",
         "Series",
         Kind::Text,
-        "The series' name as the Grand Comics Database or the publisher gives it, without its year or volume, and without a leading The. Keep a slash the title has, as in Batman/Spawn: War Devil. A one-shot's own title, such as Giant Superhero Holiday Grab-Bag, is its story title, not part of the series.",
+        "The series' name as the Grand Comics Database or the publisher gives it, without its year or volume, and without a leading The. Keep a slash the title has, as in Batman/Spawn: War Devil, with its parts in the order the cover prints them. A translated edition goes by the title its own cover prints. A one-shot's own title, such as Giant Superhero Holiday Grab-Bag, is its story title, not part of the series.",
     ),
     field(
         "start_year",
         "Start year",
         Kind::Year,
-        "The year the series' first issue came out, as in 'Amazing Spider-Man (1963)'.",
+        "The year on the cover date of the series' first issue, not the year it went on sale, as in 'Amazing Spider-Man (1963)'.",
     ),
     // Asked only of a book from photos, and kept only where its covers
     // print no number.
@@ -110,7 +110,7 @@ pub const FIELDS: &[Field] = &[
         "publisher",
         "Publisher",
         Kind::Text,
-        "The publisher by its short name: Marvel Comics, Archie Comics, Mirage Studios, and otherwise the brand alone, such as DC, Image, Dark Horse, or IDW. Two publishers are joined by and, as in DC and Marvel Comics.",
+        "The publisher by its short name: Marvel Comics, Archie Comics, Mirage Studios, and otherwise the brand alone, such as DC, Image, Dark Horse, or IDW. A publisher outside the US by the full name it publishes under. Two publishers are joined by and, as in DC and Marvel Comics.",
     ),
     field(
         "imprint",
@@ -152,7 +152,7 @@ pub const FIELDS: &[Field] = &[
         "story_title",
         "Story title",
         Kind::Text,
-        "The title of the issue's main story; blank if it has none.",
+        "The title of the issue's main story exactly as printed, with its spelling and punctuation, such as 'Til Death Do Us Part!; blank if it has none.",
     ),
     field(
         "cover_date",
