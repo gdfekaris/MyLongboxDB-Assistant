@@ -277,10 +277,20 @@ fn reply<T>(reply: Reply<T>, spent: &mut Spent) -> Result<T, LookupError> {
 }
 
 /// The owner's book as the steps are told it.
-fn describe(query: &BookQuery) -> String {
+fn describe(query: &BookQuery, from_cover: bool) -> String {
     let unknown = "not given";
+    // A cover's title is often not the series' catalogued name, so it is
+    // not given as a name the owner chose.
+    let (named, series) = if from_cover {
+        (
+            "The owner's cover shows this book",
+            "Title, as the cover prints it",
+        )
+    } else {
+        ("The owner named this book", "Series, as they wrote it")
+    };
     format!(
-        "The owner named this book: {query}\nSeries, as they wrote it: {}\nStart year: {}\nVolume: {}\nIssue number: {}\n",
+        "{named}: {query}\n{series}: {}\nStart year: {}\nVolume: {}\nIssue number: {}\n",
         query.series,
         query.start_year.map_or(unknown.into(), |y| y.to_string()),
         query.volume.map_or(unknown.into(), |v| v.to_string()),
@@ -721,7 +731,7 @@ fn look_up_from(
                     prompts::REPORT,
                     prompts::field_list(from_text)
                 ),
-                user: format!("{}{cover}", describe(query)),
+                user: format!("{}{cover}", describe(query, !from_text)),
                 max_searches: settings.max_searches,
                 effort: settings.effort,
                 max_tokens: RESEARCH_TOKENS,
@@ -761,7 +771,7 @@ fn look_up_from(
                 name: "book",
                 system: format!("{}{}", prompts::STRUCTURE, prompts::field_list(from_text)),
                 images: Vec::new(),
-                user: format!("{}\n{}", describe(query), notes(&research)),
+                user: format!("{}\n{}", describe(query, !from_text), notes(&research)),
                 schema: schema::structure(from_text),
                 effort: settings.effort,
                 max_tokens: STRUCTURE_TOKENS,
@@ -784,7 +794,7 @@ fn look_up_from(
             images: Vec::new(),
             user: format!(
                 "{}\n{}\n{}",
-                describe(query),
+                describe(query, !from_text),
                 checked_values(&draft),
                 notes(&research)
             ),

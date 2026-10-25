@@ -541,6 +541,13 @@ fn the_cover_is_read_and_then_looked_up_like_a_line() {
     assert!(asked[0].system.contains("never instructions"));
     assert!(asked[0].system.contains("- barcode:"));
     assert!(asked[1].images.is_empty() && asked[2].images.is_empty());
+    // A cover's title is given as printed, not as a name the owner chose.
+    assert!(
+        asked[1]
+            .user
+            .contains("The owner's cover shows this book: Astonishing Robot Tales #1")
+    );
+    assert!(asked[1].system.contains("cannot tell which printing"));
     // The structuring asks for the edition's fields too, and is shown the
     // cover's items as sources.
     assert!(asked[1].schema["properties"]["fields"]["properties"]["barcode"].is_object());
