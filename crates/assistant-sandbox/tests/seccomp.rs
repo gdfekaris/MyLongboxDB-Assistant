@@ -32,9 +32,14 @@ fn socket(family: i32, kind: i32) -> Result<(), i32> {
 #[test]
 fn sockets_the_app_does_not_need_are_refused() {
     limited();
-    // Raw packets, the kernel's crypto interface, and virtual machine
-    // sockets, among every family not allowed.
-    for family in [libc::AF_PACKET, libc::AF_ALG, libc::AF_VSOCK] {
+    // Raw packets, the kernel's crypto interface, virtual machine
+    // sockets, and netlink, among every family not allowed.
+    for family in [
+        libc::AF_PACKET,
+        libc::AF_ALG,
+        libc::AF_VSOCK,
+        libc::AF_NETLINK,
+    ] {
         assert_eq!(
             socket(family, libc::SOCK_DGRAM),
             Err(libc::EACCES),
@@ -44,7 +49,7 @@ fn sockets_the_app_does_not_need_are_refused() {
 }
 
 #[test]
-fn internet_netlink_and_local_sockets_still_work() {
+fn internet_and_local_sockets_still_work() {
     limited();
     // Making a socket, not reaching anywhere: Landlock decides that.
     UdpSocket::bind("127.0.0.1:0").unwrap();
@@ -52,7 +57,6 @@ fn internet_netlink_and_local_sockets_still_work() {
     // Some test machines have no IPv6 at all; only the filter's answer
     // matters here.
     assert_ne!(socket(libc::AF_INET6, libc::SOCK_STREAM), Err(libc::EACCES));
-    assert_eq!(socket(libc::AF_NETLINK, libc::SOCK_DGRAM), Ok(()));
     let (a, b) = UnixDatagram::pair().unwrap();
     a.send(b"hello").unwrap();
     let mut buf = [0; 5];

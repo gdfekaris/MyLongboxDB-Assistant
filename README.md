@@ -150,7 +150,7 @@ authors. The list grows as the app is built.
   its own folders and the folder through which the file chooser hands
   over saved files, can connect over TCP only to port 443, and can
   never listen for connections; and a seccomp filter that refuses
-  sockets other than local, IPv4, IPv6, and netlink ones, and io_uring.
+  sockets other than local, IPv4, and IPv6 ones, and io_uring.
   These hold even if other code in the app misbehaves, though not
   against code that has taken over the whole process. Verify with
   `cargo test -p assistant-sandbox`, whose tests apply each limit and

@@ -46,15 +46,10 @@ fn error(what: &str, e: impl fmt::Display) -> Error {
 pub const HTTPS_PORT: u16 = 443;
 
 /// The socket families the app needs: local sockets for the display and
-/// D-Bus, IPv4 and IPv6 for the providers and name lookups, and netlink,
-/// which the C library's name lookup uses to learn the machine's own
-/// addresses.
-const FAMILIES: [i32; 4] = [
-    libc::AF_UNIX,
-    libc::AF_INET,
-    libc::AF_INET6,
-    libc::AF_NETLINK,
-];
+/// D-Bus, and IPv4 and IPv6 for the providers and name lookups. The C
+/// library's name lookup also asks for a netlink socket, to learn which
+/// address families the machine has; refused one, it assumes both.
+const FAMILIES: [i32; 3] = [libc::AF_UNIX, libc::AF_INET, libc::AF_INET6];
 
 /// The filter: a socket of any other family is refused with `EACCES`,
 /// which callers treat as "not permitted", and so is setting up io_uring,
