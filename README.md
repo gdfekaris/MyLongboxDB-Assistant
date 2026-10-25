@@ -91,7 +91,7 @@ and revoke it at the first doubt.
 ## Security model
 
 Each claim below comes with a way to check it without trusting the
-authors. The list grows as the app is built.
+authors.
 
 - **Only crates from crates.io, and only one way onto the network.**
   `deny.toml` bans every HTTP, socket, and TLS crate except ureq,
@@ -158,7 +158,49 @@ authors. The list grows as the app is built.
   `cargo test -p assistant-sandbox`, whose tests apply each limit and
   try to break it. Kernels before Landlock ABI 4 cannot limit TCP; with
   `ASSISTANT_REQUIRE_LANDLOCK_NET=1` set, the test fails on such a
-  kernel instead of skipping that part.
+  kernel instead of skipping that part. While the app runs,
+  `grep Seccomp_filters /proc/$(pgrep -n -f /app/bin/mylongboxdb-assistant)/status`
+  shows 2: Flatpak's own filter and the app's.
+- **Photos carry nothing but their pixels.** Every photo you pick is
+  checked against MyLongboxDB's limits (50 MB, 100 megapixels, 40,000
+  pixels a side) before it is decoded, then re-encoded from its pixels
+  alone, so no EXIF, GPS, XMP, IPTC, comment, or colour-profile data
+  reaches the provider or the export. Verify with
+  `cargo test -p assistant-media`, whose tests hide marked text in each
+  kind of metadata and check that none of it survives, and by running
+  `exiftool` on a photo in an export, which shows no camera or
+  location.
+- **Photos are decoded on a locked-down thread.** The JPEG, PNG, WebP,
+  and HEIC decoders run on a thread that can open no file, make or use
+  no socket, write only to standard output and error, and start no
+  program, so a flaw in a decoder has little to reach. Photos the app
+  saved itself are read back only as JPEGs of its own naming and size.
+  Verify with `cargo test -p assistant-sandbox --test confine` and
+  `cargo test -p assistant-media`, which decodes each format on such a
+  thread (HEIC with `--features heic`, in the GNOME SDK).
+- **What the model says is not trusted.** Each answer must match a
+  strict schema, which refuses unknown fields, wrong types, and
+  oversized lists. A value is kept only if it cites a page the
+  provider's web search actually returned, or what was read from your
+  own cover, and a separate check step compares each value with what
+  its source says. Every value then passes the checks MyLongboxDB's
+  import applies, and nothing a model says can choose a file, a host,
+  or a setting. You review everything before export, and values you
+  leave unticked are left out. Verify with
+  `cargo test -p assistant-core`, and with the CI job that imports the
+  app's exports using MyLongboxDB's own code at a pinned release.
+- **No telemetry, crash reports, or update checks.** The app can reach
+  only the two provider hosts above, so there is nowhere else for them
+  to go. Verify with `cargo test -p assistant-net`, and with
+  `grep -n HOSTS crates/assistant-net/src/http.rs`.
+- **Your results and exports never hold a key.** Looked-up books wait
+  in `~/.var/app/io.github.gdfekaris.MyLongboxDB.Assistant/data/results.json`,
+  with your photos beside it, until you export or discard them. That
+  file and the export are written by `crates/assistant-core`, which
+  does not depend on the key or network code at all, so neither can
+  contain a key. Verify with
+  `cargo tree -p assistant-core -e normal | grep -E 'assistant-(keys|net)'`,
+  which prints nothing.
 - **Network and display only.** The Flatpak manifest grants exactly
   `--share=network`, `--socket=wayland`, `--socket=fallback-x11`,
   `--share=ipc`, and `--device=dri`: no access to your home folder or
