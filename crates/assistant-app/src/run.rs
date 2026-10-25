@@ -328,6 +328,17 @@ impl RunPage {
                     ("cost", &cost),
                 ],
             )
+        } else if run.cancel.load(Ordering::Relaxed) {
+            // A request already sent cannot be called back, and is paid
+            // for; with web search it can take some minutes.
+            gettext_f(
+                "Stopping: lookups already under way finish first, and are paid for. {done} of {total} books done. Spent {cost} so far.",
+                &[
+                    ("done", &done.to_string()),
+                    ("total", &run.books.len().to_string()),
+                    ("cost", &cost),
+                ],
+            )
         } else {
             gettext_f(
                 "{done} of {total} books done. Spent {cost} so far.",
