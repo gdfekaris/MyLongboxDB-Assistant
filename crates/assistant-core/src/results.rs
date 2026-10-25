@@ -36,6 +36,11 @@ pub struct Photo {
 }
 
 impl Photo {
+    /// The name it is kept by, the same for as long as it is kept.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
     /// A photo not yet kept, given a name of its own.
     pub fn new(jpeg: Jpeg) -> Self {
         Self {

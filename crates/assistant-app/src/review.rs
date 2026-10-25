@@ -4,6 +4,7 @@
 //! as text; the app never opens them.
 
 use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use adw::prelude::*;
@@ -12,6 +13,12 @@ use assistant_core::model::{Confidence, Role};
 use assistant_core::results::ReviewBook;
 
 use crate::i18n::{gettext, gettext_f};
+use crate::photos;
+
+/// The size of a book's thumbnail in the list.
+const THUMBNAIL: i32 = 48;
+/// The longest edge of a photo on a book's page.
+const PHOTO_EDGE: u32 = 480;
 
 /// One of a book's lists.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -261,6 +268,45 @@ fn book_content(index: usize, book: &ReviewBook, emit: &Emit) -> gtk::Box {
     top.add(&discard);
     column.append(&top);
 
+    // The owner's own photos, as they will go into the export.
+    let shown: Vec<(String, gtk::Picture)> = [
+        (gettext("Front cover"), &book.front),
+        (gettext("Back cover"), &book.back),
+    ]
+    .into_iter()
+    .filter_map(|(label, photo)| {
+        let texture = photos::kept(&photo.as_ref()?.jpeg, PHOTO_EDGE)?;
+        let picture = gtk::Picture::builder()
+            .paintable(&texture)
+            .content_fit(gtk::ContentFit::Contain)
+            .height_request(240)
+            .hexpand(true)
+            .alternative_text(&label)
+            .build();
+        Some((label, picture))
+    })
+    .collect();
+    if !shown.is_empty() {
+        let group = group(&gettext("Your Photos"));
+        let pictures = gtk::Box::builder().spacing(12).homogeneous(true).build();
+        for (label, picture) in shown {
+            let side = gtk::Box::builder()
+                .orientation(gtk::Orientation::Vertical)
+                .spacing(6)
+                .build();
+            side.append(&picture);
+            side.append(
+                &gtk::Label::builder()
+                    .label(&label)
+                    .css_classes(["caption", "dim-label"])
+                    .build(),
+            );
+            pictures.append(&side);
+        }
+        group.add(&pictures);
+        column.append(&group);
+    }
+
     match &draft.identity {
         Identity::Identified => {
             let details = group(&gettext("Details"));
@@ -413,6 +459,8 @@ pub struct ReviewPage {
     emit: Emit,
     /// The book whose page is open, if one is.
     open: Rc<Cell<Option<usize>>>,
+    /// Thumbnails already made, by the name their photo is kept by.
+    thumbnails: RefCell<HashMap<String, Option<gtk::gdk::Texture>>>,
 }
 
 impl ReviewPage {
@@ -462,6 +510,7 @@ impl ReviewPage {
             add_books,
             emit: Rc::new(emit),
             open: Rc::new(Cell::new(None)),
+            thumbnails: RefCell::new(HashMap::new()),
         }
     }
 
@@ -470,6 +519,12 @@ impl ReviewPage {
         while let Some(row) = self.list.first_child() {
             self.list.remove(&row);
         }
+        // Thumbnails of books no longer here are not kept.
+        self.thumbnails.borrow_mut().retain(|name, _| {
+            books
+                .iter()
+                .any(|b| b.front.as_ref().is_some_and(|p| p.name() == name))
+        });
         for (index, book) in books.iter().enumerate() {
             let row = adw::ActionRow::builder()
                 .title(book.draft.query.to_string())
@@ -477,6 +532,19 @@ impl ReviewPage {
                 .activatable(true)
                 .build();
             row.set_use_markup(false);
+            // Prefixes go in front of those already added, so the thumbnail,
+            // added first, sits after the check box.
+            if let Some(front) = &book.front {
+                let texture = self
+                    .thumbnails
+                    .borrow_mut()
+                    .entry(front.name().to_owned())
+                    .or_insert_with(|| photos::kept(&front.jpeg, THUMBNAIL as u32 * 2))
+                    .clone();
+                let image = gtk::Image::builder().pixel_size(THUMBNAIL).build();
+                image.set_paintable(texture.as_ref());
+                row.add_prefix(&image);
+            }
             if book.draft.identity == Identity::Identified {
                 let include = gtk::CheckButton::builder()
                     .active(book.included)

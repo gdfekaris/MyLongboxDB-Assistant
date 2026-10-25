@@ -6,8 +6,8 @@ use std::path::Path;
 
 use assistant_core::Jpeg;
 use assistant_media::{
-    DEFAULT_LONG_EDGE, DEFAULT_QUALITY, Edit, Output, RgbImage, apply_edit, decode_bytes, encode,
-    preview, read_file, upright,
+    DEFAULT_LONG_EDGE, DEFAULT_QUALITY, Edit, MAX_SAVED_SIDE, Output, RgbImage, apply_edit,
+    decode_bytes, decode_saved, encode, preview, read_file, upright,
 };
 use gtk::{gdk, glib};
 
@@ -114,6 +114,14 @@ fn confined<T: Send + 'static>(
         })
         .map_err(|e| e.to_string())?;
     thread.join().unwrap_or(Err(unreadable))
+}
+
+/// A kept photo to show, at most `edge` pixels a side. Kept photos are
+/// read back from a file that could have been changed, so only a JPEG
+/// the app could have made is decoded, by the size-limited decoder.
+pub fn kept(jpeg: &Jpeg, edge: u32) -> Option<gdk::Texture> {
+    let image = decode_saved(jpeg.bytes(), MAX_SAVED_SIDE).ok()?;
+    texture_of(&preview(&image, edge))
 }
 
 /// Hands pixels to GTK to show.
