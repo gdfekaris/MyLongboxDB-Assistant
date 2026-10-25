@@ -117,15 +117,39 @@ fn next_button(label: &str) -> gtk::Button {
         .build()
 }
 
+/// The providers setup offers. OpenRouter's client is kept, but it is
+/// not offered until its web search has been checked with real models.
+const OFFERED: &[ProviderChoice] = &[ProviderChoice::Anthropic];
+
 /// What the owner is told before anything is sent anywhere.
 fn notice() -> String {
-    gettext(
-        "MyLongboxDB Assistant sends the books you add to the AI provider you choose: \
-         each cover photo, re-encoded so it carries no location or camera details, and \
-         the lines you type, with the app's own instructions. If you choose OpenRouter, \
-         it passes them on to the company running the model. Your MyLongboxDB \
-         collection, your file names, and anything about your computer are never sent.",
-    )
+    let mut text = gettext(
+        "MyLongboxDB Assistant sends the books you add to the AI provider: each cover \
+         photo, re-encoded so it carries no location or camera details, and the lines \
+         you type, with the app's own instructions. Your MyLongboxDB collection, your \
+         file names, and anything about your computer are never sent.",
+    );
+    if OFFERED.contains(&ProviderChoice::OpenRouter) {
+        text.push(' ');
+        text.push_str(&gettext(
+            "If you choose OpenRouter, it passes them on to the company running the model.",
+        ));
+    }
+    text
+}
+
+/// A provider's name and what it is, for setup.
+fn described(provider: ProviderChoice) -> (String, String) {
+    match provider {
+        ProviderChoice::Anthropic => (
+            gettext("Anthropic"),
+            gettext("Claude models, through Anthropic's own API"),
+        ),
+        ProviderChoice::OpenRouter => (
+            gettext("OpenRouter"),
+            gettext("Many companies' models, through one API"),
+        ),
+    }
 }
 
 fn advice(provider: ProviderChoice) -> String {
@@ -158,28 +182,26 @@ pub fn build(
     let group = adw::PreferencesGroup::builder()
         .title(gettext("Provider"))
         .build();
-    let anthropic = gtk::CheckButton::new();
-    anthropic.set_active(true);
-    let openrouter = gtk::CheckButton::new();
-    openrouter.set_group(Some(&anthropic));
-    for (check, title, subtitle) in [
-        (
-            &anthropic,
-            gettext("Anthropic"),
-            gettext("Claude models, through Anthropic's own API"),
-        ),
-        (
-            &openrouter,
-            gettext("OpenRouter"),
-            gettext("Many companies' models, through one API"),
-        ),
-    ] {
+    // With one provider there is nothing to choose: it is only named.
+    let checks: Vec<(ProviderChoice, gtk::CheckButton)> = OFFERED
+        .iter()
+        .map(|provider| (*provider, gtk::CheckButton::new()))
+        .collect();
+    for (n, (provider, check)) in checks.iter().enumerate() {
+        let (title, subtitle) = described(*provider);
         let row = adw::ActionRow::builder()
             .title(title)
             .subtitle(subtitle)
-            .activatable_widget(check)
             .build();
-        row.add_prefix(check);
+        if checks.len() > 1 {
+            if n == 0 {
+                check.set_active(true);
+            } else {
+                check.set_group(Some(&checks[0].1));
+            }
+            row.set_activatable_widget(Some(check));
+            row.add_prefix(check);
+        }
         group.add(&row);
     }
     first.append(&group);
@@ -188,15 +210,11 @@ pub fn build(
     first.append(&to_key);
     nav.add(&page(&gettext("Set Up"), &first));
 
-    let chosen = {
-        let openrouter = openrouter.clone();
-        move || {
-            if openrouter.is_active() {
-                ProviderChoice::OpenRouter
-            } else {
-                ProviderChoice::Anthropic
-            }
-        }
+    let chosen = move || {
+        checks
+            .iter()
+            .find(|(_, check)| check.is_active())
+            .map_or(OFFERED[0], |(provider, _)| *provider)
     };
 
     {

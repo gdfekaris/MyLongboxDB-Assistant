@@ -3,8 +3,8 @@
 A Linux desktop app that fills in the details of comic books, magazines,
 and collected editions for
 [MyLongboxDB](https://github.com/gdfekaris/MyLongboxDB). Give it a cover
-photo, or a series and issue number, and an AI model, called with your
-own API key from Anthropic or OpenRouter, looks the book up. You review
+photo, or a series and issue number, and a Claude model, called with
+your own Anthropic API key, looks the book up. You review
 every field it found, then the app writes the books as a MyLongboxDB
 full export, which MyLongboxDB imports like any other.
 
@@ -73,20 +73,18 @@ cargo vet --locked
 
 ## What is sent where
 
-The app connects to exactly two hosts, both over HTTPS: `api.anthropic.com`
-if you choose Anthropic, and `openrouter.ai` if you choose OpenRouter.
+The app connects to one host, over HTTPS: `api.anthropic.com`. Its network
+layer also allows `openrouter.ai`, for OpenRouter support planned for a
+later version, but this version never contacts it.
 
-- **Sent to the provider you choose:** each cover photo you add,
-  re-encoded from its pixels so it carries no EXIF, GPS, or other
-  metadata; the series and issue lines you type; and the app's fixed
-  instructions. OpenRouter passes these on to the company that runs the
-  model you pick.
+- **Sent to Anthropic:** each cover photo you add, re-encoded from its
+  pixels so it carries no EXIF, GPS, or other metadata; the series and
+  issue lines you type; and the app's fixed instructions.
 - **Never sent:** your MyLongboxDB collection, file names, or anything
   about your computer beyond what any HTTPS request carries.
 
-Use a dedicated API key for this app with a monthly spending limit (an
-Anthropic workspace spend limit, or an OpenRouter per-key credit limit),
-and revoke it at the first doubt.
+Use a dedicated API key for this app, in an Anthropic workspace with a
+monthly spend limit, and revoke it at the first doubt.
 
 ## Security model
 

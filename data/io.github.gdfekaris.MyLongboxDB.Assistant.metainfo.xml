@@ -14,8 +14,7 @@
     <p>
       MyLongboxDB Assistant looks up the details of comic books, magazines,
       and collected editions from a cover photo or a series and issue
-      number, using an AI model from Anthropic or OpenRouter with your own
-      API key. You review every field it found before anything is saved,
+      number, using a Claude model from Anthropic with your own API key. You review every field it found before anything is saved,
       and the results are written as a MyLongboxDB full export for you to
       import.
     </p>
