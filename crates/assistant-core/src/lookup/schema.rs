@@ -250,6 +250,24 @@ mod tests {
     }
 
     #[test]
+    fn the_book_is_identified_before_its_fields_and_lists_are_written() {
+        // A model writes the answer in the schema's order, so it should
+        // settle which issue this is before filling anything in.
+        let text = structure(false).to_string();
+        let at = |key: &str| text.find(&format!("\"{key}\":")).unwrap();
+        assert!(at("identification") < at("fields"));
+        assert!(at("fields") < at("credits"));
+        assert!(at("credits") < at("characters"));
+        let fields = structure(false)["properties"]["fields"]["properties"]
+            .as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
+        assert_eq!(fields[..2], ["series", "start_year"]);
+    }
+
+    #[test]
     fn schemas_keep_within_what_structured_outputs_allow() {
         assert_strict(&structure(true), "structure");
         assert_strict(&structure(false), "structure");

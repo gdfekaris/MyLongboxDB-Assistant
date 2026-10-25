@@ -522,6 +522,19 @@
     {
         "type": "archive",
         "archive-type": "tar-gzip",
+        "url": "https://static.crates.io/crates/foldhash/foldhash-0.2.0.crate",
+        "sha256": "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb",
+        "dest": "cargo/vendor/foldhash-0.2.0"
+    },
+    {
+        "type": "inline",
+        "contents": "{\"package\": \"77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb\", \"files\": {}}",
+        "dest": "cargo/vendor/foldhash-0.2.0",
+        "dest-filename": ".cargo-checksum.json"
+    },
+    {
+        "type": "archive",
+        "archive-type": "tar-gzip",
         "url": "https://static.crates.io/crates/four-cc/four-cc-0.4.0.crate",
         "sha256": "795cbfc56d419a7ce47ccbb7504dd9a5b7c484c083c356e797de08bd988d9629",
         "dest": "cargo/vendor/four-cc-0.4.0"

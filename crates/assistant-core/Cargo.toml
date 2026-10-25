@@ -17,5 +17,8 @@ csv = "1.4.0"
 zip = { version = "9.0.4", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 uuid = { version = "1.28.0", default-features = false, features = ["std", "v4"] }
 # The lookup's schemas and the model's structured answers, read strictly.
+# A model answers a schema's properties in the order given, so objects
+# keep their order rather than being sorted; indexmap, which that uses,
+# is already built for zip.
 serde = { version = "1.0.229", features = ["derive"] }
-serde_json = "1.0.154"
+serde_json = { version = "1.0.154", features = ["preserve_order"] }
