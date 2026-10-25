@@ -6,6 +6,7 @@ mod add;
 mod app;
 mod config;
 mod i18n;
+mod photo_editor;
 mod photos;
 mod review;
 mod run;

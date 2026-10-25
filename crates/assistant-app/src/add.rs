@@ -12,10 +12,13 @@ use assistant_media::Edit;
 use gtk::{gio, glib};
 
 use crate::i18n::{gettext, gettext_f};
+use crate::photo_editor;
 use crate::photos::{self, Picked};
 
 /// The size of a photo's thumbnail in the list.
 const THUMBNAIL: i32 = 56;
+/// The longest edge of the picture the editor shows.
+const EDITOR_EDGE: u32 = 1200;
 
 /// A book given as photos: its front cover, and its back if taken.
 #[derive(Clone, Debug)]
@@ -293,7 +296,9 @@ impl AddPage {
                 .unwrap_or_else(|| gettext("photo"));
             let read = match file.path() {
                 Some(path) => gio::spawn_blocking(move || {
-                    photos::prepare(photos::read(&path)?, Edit::default())
+                    let bytes = photos::read(&path)?;
+                    let prepared = photos::prepare(bytes.clone(), Edit::default())?;
+                    Ok((bytes, prepared))
                 })
                 .await
                 .unwrap_or_else(|_| Err(gettext("the photo could not be read"))),
@@ -301,9 +306,10 @@ impl AddPage {
             };
             self.reading.set(self.reading.get().saturating_sub(1));
             match read {
-                Ok(prepared) => {
+                Ok((bytes, prepared)) => {
                     let picked = Picked {
                         name,
+                        original: Rc::new(bytes),
                         jpeg: prepared.jpeg,
                         size: prepared.size,
                         thumbnail: prepared.thumbnail,
@@ -329,6 +335,88 @@ impl AddPage {
             self.show_photos();
             self.refresh();
         }
+    }
+
+    /// Opens the editor on one of a book's photos, and remakes the photo
+    /// with the owner's changes when they save.
+    fn edit(self: &Rc<Self>, i: usize, back: bool) {
+        let picked = {
+            let photos = self.photos.borrow();
+            let Some(book) = photos.get(i) else {
+                return;
+            };
+            match (back, &book.back) {
+                (false, _) => book.front.clone(),
+                (true, Some(b)) => b.clone(),
+                (true, None) => return,
+            }
+        };
+        let title = if back {
+            gettext("Edit Back Cover")
+        } else {
+            gettext("Edit Front Cover")
+        };
+        let Some(window) = self.root.root().and_downcast::<gtk::Window>() else {
+            return;
+        };
+        let page = Rc::downgrade(self);
+        glib::spawn_future_local(async move {
+            let bytes = picked.original.as_ref().clone();
+            let preview = gio::spawn_blocking(move || photos::for_editing(bytes, EDITOR_EDGE))
+                .await
+                .unwrap_or_else(|_| Err(gettext("the photo could not be read")));
+            let Some(page) = page.upgrade() else {
+                return;
+            };
+            let preview = match preview {
+                Ok(preview) => preview,
+                Err(why) => {
+                    page.problems
+                        .borrow_mut()
+                        .push(photos::not_edited(&picked.name, &why));
+                    page.show_photos();
+                    return;
+                }
+            };
+            let weak = Rc::downgrade(&page);
+            photo_editor::open(&window, &title, preview, move |edit| {
+                if let Some(page) = weak.upgrade() {
+                    let picked = picked.clone();
+                    glib::spawn_future_local(async move { page.remake(picked, edit).await });
+                }
+            });
+        });
+    }
+
+    /// Makes the kept photo again from the original with `edit`, and puts
+    /// it in place of the one it was made from, wherever that now is.
+    async fn remake(self: &Rc<Self>, picked: Picked, edit: Edit) {
+        self.reading.set(self.reading.get() + 1);
+        self.refresh();
+        let bytes = picked.original.as_ref().clone();
+        let made = gio::spawn_blocking(move || photos::prepare(bytes, edit))
+            .await
+            .unwrap_or_else(|_| Err(gettext("the photo could not be read")));
+        self.reading.set(self.reading.get().saturating_sub(1));
+        match made {
+            Ok(prepared) => {
+                for book in self.photos.borrow_mut().iter_mut() {
+                    for slot in std::iter::once(&mut book.front).chain(book.back.as_mut()) {
+                        if Rc::ptr_eq(&slot.original, &picked.original) {
+                            slot.jpeg = prepared.jpeg.clone();
+                            slot.size = prepared.size;
+                            slot.thumbnail = prepared.thumbnail.clone();
+                        }
+                    }
+                }
+            }
+            Err(why) => self
+                .problems
+                .borrow_mut()
+                .push(photos::not_edited(&picked.name, &why)),
+        }
+        self.show_photos();
+        self.refresh();
     }
 
     /// Changes the photo books, then shows them as they now are.
@@ -386,12 +474,32 @@ impl AddPage {
             .margin_top(6)
             .margin_bottom(6)
             .build();
-        for picked in std::iter::once(&book.front).chain(book.back.as_ref()) {
+        for (picked, back) in
+            std::iter::once((&book.front, false)).chain(book.back.as_ref().map(|b| (b, true)))
+        {
             let image = gtk::Image::builder().pixel_size(THUMBNAIL).build();
             if let Some(texture) = photos::texture_of(&picked.thumbnail) {
                 image.set_paintable(Some(&texture));
             }
-            thumbnails.append(&image);
+            // A photo is edited by choosing it.
+            let tip = if back {
+                gettext("Edit Back Cover")
+            } else {
+                gettext("Edit Front Cover")
+            };
+            let edit = gtk::Button::builder()
+                .child(&image)
+                .tooltip_text(&tip)
+                .css_classes(["flat"])
+                .build();
+            edit.update_property(&[gtk::accessible::Property::Label(&tip)]);
+            let page = Rc::downgrade(self);
+            edit.connect_clicked(move |_| {
+                if let Some(page) = page.upgrade() {
+                    page.edit(i, back);
+                }
+            });
+            thumbnails.append(&edit);
         }
         row.add_prefix(&thumbnails);
         let button = |icon: &str, tip: String| {

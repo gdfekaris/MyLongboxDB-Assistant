@@ -21,6 +21,9 @@ const THUMBNAIL_EDGE: u32 = 160;
 pub struct Picked {
     /// The file's name, for the owner to tell photos apart.
     pub name: String,
+    /// The file as picked, kept so an edit starts from the photo itself
+    /// rather than from the smaller copy.
+    pub original: std::rc::Rc<Vec<u8>>,
     /// Upright, resized, and re-encoded from pixels alone.
     pub jpeg: Jpeg,
     pub size: (u32, u32),
@@ -75,6 +78,13 @@ pub fn prepare(bytes: Vec<u8>, edit: Edit) -> Result<Prepared, String> {
     })
 }
 
+/// Decodes a photo for the editor: upright, at most `edge` pixels a
+/// side. Slow, so it runs away from the window.
+pub fn for_editing(bytes: Vec<u8>, edge: u32) -> Result<RgbImage, String> {
+    let full = confined(move || Ok(upright(decode_bytes(&bytes).map_err(|e| e.to_string())?)))?;
+    Ok(preview(&full, edge))
+}
+
 /// Decodes on a thread of its own that can reach no files, sockets, or
 /// other descriptors, so a photo crafted to take over a decoder finds
 /// nothing within reach of that thread. The decoders are the code most
@@ -118,6 +128,14 @@ pub fn texture_of(image: &RgbImage) -> Option<gdk::Texture> {
         stride,
     );
     Some(gdk::Texture::from(texture))
+}
+
+/// Why a photo could not be edited, as a line for the owner.
+pub fn not_edited(name: &str, why: &str) -> String {
+    gettext_f(
+        "{name} was not changed: {why}",
+        &[("name", name), ("why", why)],
+    )
 }
 
 /// Why a photo was not added, as a line for the owner.
