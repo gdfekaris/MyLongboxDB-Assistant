@@ -133,8 +133,18 @@ fn write_access() -> landlock::BitFlags<AccessFs> {
 /// before Landlock ABI 4 enforce the file limits but not the TCP ones.
 ///
 /// Call it before any other thread starts, since threads already running
-/// keep their old rights. Like the socket filter, it cannot be undone.
+/// keep their old rights; it refuses, changing nothing, if another thread
+/// is running. Like the socket filter, it cannot be undone.
 pub fn limit_access(writable: &[&Path]) -> Result<Enforced, Error> {
+    match threads() {
+        Some(1) => {}
+        Some(n) => {
+            return Err(Error(format!(
+                "{n} threads are running, and all but this one would escape the file limits"
+            )));
+        }
+        None => return Err(Error("could not count the app's threads".into())),
+    }
     let access = write_access();
     let fail = |e: landlock::RulesetError| error("the kernel refused the file limits", e);
     let existing = writable.iter().filter(|p| p.exists());
@@ -156,6 +166,17 @@ pub fn limit_access(writable: &[&Path]) -> Result<Enforced, Error> {
         RulesetStatus::PartiallyEnforced => Enforced::Partly,
         RulesetStatus::NotEnforced => Enforced::Not,
     })
+}
+
+/// How many threads the process has, from the kernel's own count.
+fn threads() -> Option<usize> {
+    std::fs::read_to_string("/proc/self/status")
+        .ok()?
+        .lines()
+        .find_map(|line| line.strip_prefix("Threads:"))?
+        .trim()
+        .parse()
+        .ok()
 }
 
 /// Stops the calling thread, and every thread it starts, from reaching

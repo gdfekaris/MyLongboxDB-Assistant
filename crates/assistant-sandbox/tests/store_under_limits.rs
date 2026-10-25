@@ -8,7 +8,13 @@ use std::path::PathBuf;
 
 use assistant_sandbox::{Enforced, limit_access};
 
-#[test]
+/// Run as a program of its own, without the test runner's threads, since
+/// the limits refuse to apply while other threads are running.
+fn main() {
+    the_key_file_and_results_save_within_the_app_folders();
+    println!("store under limits: ok");
+}
+
 fn the_key_file_and_results_save_within_the_app_folders() {
     let base = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("store-under-limits");
     let _ = fs::remove_dir_all(&base);

@@ -31,7 +31,14 @@ fn kernel_abi() -> i64 {
     abi.max(0)
 }
 
-#[test]
+/// Run as a program of its own, without the test runner's threads, since
+/// the limits refuse to apply while other threads are running.
+fn main() {
+    files_change_only_in_the_allowed_folders_and_tcp_reaches_only_https();
+    the_limits_refuse_to_apply_while_another_thread_runs();
+    println!("landlock: ok");
+}
+
 fn files_change_only_in_the_allowed_folders_and_tcp_reaches_only_https() {
     // CI sets this, so that a runner kernel too old to check everything
     // below fails the run rather than skipping part of it unseen.
@@ -113,4 +120,13 @@ fn files_change_only_in_the_allowed_folders_and_tcp_reaches_only_https() {
         assert!(!denied(https), "the HTTPS port must stay reachable");
     }
     drop(listener);
+}
+
+fn the_limits_refuse_to_apply_while_another_thread_runs() {
+    let (go, wait) = std::sync::mpsc::channel::<()>();
+    let running = std::thread::spawn(move || wait.recv().unwrap());
+    let refused = limit_access(&[]).unwrap_err();
+    assert!(refused.to_string().contains("threads"), "{refused}");
+    go.send(()).unwrap();
+    running.join().unwrap();
 }
