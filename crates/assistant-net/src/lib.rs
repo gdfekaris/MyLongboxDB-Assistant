@@ -12,5 +12,8 @@ pub mod provider;
 pub mod retry;
 pub mod roots;
 
+#[cfg(test)]
+mod arbitrary;
+
 pub use http::{Client, HOSTS, Host, NetError};
 pub use provider::{Citation, Effort, Part, Schema};

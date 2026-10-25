@@ -54,15 +54,23 @@ pub struct Schema {
 /// Text from a provider, made safe to show: the key taken out wherever it
 /// appears, control characters dropped, and the length capped.
 pub(crate) fn scrubbed(text: &str, key: &str) -> String {
-    let text = if key.is_empty() {
-        text.to_owned()
+    // Hidden characters go first, so one inside an echoed key cannot keep
+    // it from being found, and then show it whole once dropped, or show
+    // it as is if never dropped.
+    let shown: String = text.chars().filter(|c| !hidden(*c)).collect();
+    let shown = if key.is_empty() {
+        shown
     } else {
-        text.replace(key, "[key]")
+        shown.replace(key, "[key]")
     };
-    text.chars()
-        .filter(|c| !c.is_control())
-        .take(MAX_MESSAGE_CHARS)
-        .collect()
+    shown.chars().take(MAX_MESSAGE_CHARS).collect()
+}
+
+/// Control characters, and those that take up no space or change the
+/// direction of text.
+fn hidden(c: char) -> bool {
+    c.is_control()
+        || matches!(c, '\u{00AD}' | '\u{061C}' | '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2060}'..='\u{2069}' | '\u{FEFF}')
 }
 
 /// The error a non-success response stands for, from the error body
@@ -152,6 +160,68 @@ mod tests {
         assert!(!shown.contains("TESTONLY"));
         assert!(shown.contains("[key]"));
         assert!(!shown.contains('\n'));
+        // Broken by a character that does not show, it is still found.
+        let hidden = response(
+            401,
+            "{\"error\":{\"message\":\"bad key sk-ant-api03-TEST\u{200B}ONLY\"}}",
+        );
+        let shown = status_error(&hidden, key).to_string();
+        assert!(!shown.contains("TEST"), "{shown}");
+        assert!(shown.contains("[key]"));
+    }
+
+    mod properties {
+        use proptest::prelude::*;
+
+        use super::*;
+        use crate::arbitrary;
+
+        const KEY: &str = "sk-ant-api03-TESTONLY";
+
+        /// An error body that may echo the key anywhere, as a careless
+        /// provider might.
+        fn echoing() -> impl Strategy<Value = Vec<u8>> {
+            prop_oneof![
+                arbitrary::body(),
+                (any::<String>(), any::<String>(), any::<String>()).prop_map(|(a, b, kind)| {
+                    serde_json::to_vec(&serde_json::json!({"error": {
+                        "type": format!("{kind}{KEY}"),
+                        "message": format!("{a}{KEY}{b}\n{KEY}"),
+                    }}))
+                    .unwrap_or_default()
+                }),
+                // The key broken by a character that showing it would drop
+                // or not show at all.
+                (
+                    1..KEY.len(),
+                    prop::sample::select(&['\n', '\t', '\u{200B}', '\u{2060}', '\u{FEFF}'][..]),
+                )
+                    .prop_map(|(at, mark)| {
+                        let broken = format!("{}{mark}{}", &KEY[..at], &KEY[at..]);
+                        serde_json::to_vec(&serde_json::json!({"error": {"message": broken}}))
+                            .unwrap_or_default()
+                    }),
+            ]
+        }
+
+        proptest! {
+            #![proptest_config(ProptestConfig::with_cases(512))]
+
+            /// What an error shows never holds the key or a control
+            /// character, and its parts are short.
+            #[test]
+            fn errors_never_show_the_key(status in 400..600u16, body in echoing()) {
+                let response = Response { status, retry_after: None, body };
+                let NetError::Status { kind, message, .. } = status_error(&response, KEY) else {
+                    panic!("an error status is a status error");
+                };
+                for part in [&kind, &message] {
+                    prop_assert!(!part.contains(KEY));
+                    prop_assert!(!part.chars().any(char::is_control));
+                    prop_assert!(part.chars().count() <= MAX_MESSAGE_CHARS);
+                }
+            }
+        }
     }
 
     #[test]
