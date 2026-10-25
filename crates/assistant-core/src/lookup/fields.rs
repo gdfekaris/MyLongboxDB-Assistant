@@ -331,6 +331,8 @@ pub fn spec(key: &str) -> Option<&'static Field> {
 /// The longest text kept in a field, so a runaway answer cannot fill the
 /// review page.
 const MAX_TEXT: usize = 300;
+/// The most of a refused value a message quotes.
+const MAX_QUOTED: usize = 60;
 const MAX_LONG_TEXT: usize = 2000;
 
 /// Whether a character changes how the text around it is shown rather
@@ -362,7 +364,10 @@ pub fn check(kind: Kind, text: &str, this_year: u16) -> Result<String, String> {
         return Ok(String::new());
     }
     let year_ok = |y: u16| (1800..=this_year.saturating_add(1)).contains(&y);
-    let not = |what: &str| Err(format!("\u{201c}{text}\u{201d} is not {what}"));
+    // The text is quoted cleaned and short: it may be the model's, and the
+    // message is shown and saved as a note.
+    let shown = clean(text, MAX_QUOTED);
+    let not = |what: &str| Err(format!("\u{201c}{shown}\u{201d} is not {what}"));
     match kind {
         Kind::Text => Ok(clean(text, MAX_TEXT)),
         Kind::LongText => Ok(clean(text, MAX_LONG_TEXT)),
@@ -434,15 +439,44 @@ pub fn check(kind: Kind, text: &str, this_year: u16) -> Result<String, String> {
         Kind::Distribution => Distribution::from_code(&text.to_lowercase())
             .map(|d| d.code().to_owned())
             .map_or_else(|| not("direct or newsstand"), Ok),
-        Kind::Collects => parse_collects(text)
-            .map(|entries| format_collects(&entries))
-            .map_err(|why| format!("the Collects list cannot be read: {why}")),
+        Kind::Collects => {
+            let unreadable =
+                |why: &str| format!("the Collects list cannot be read: {}", clean(why, MAX_TEXT));
+            let entries = parse_collects(text).map_err(|why| unreadable(&why))?;
+            let written = format_collects(&entries);
+            // Kept only if it reads back as the same list, as it must when
+            // the results file is read again or MyLongboxDB imports it.
+            if parse_collects(&written).as_ref() != Ok(&entries) {
+                return Err(unreadable(&format!(
+                    "\u{201c}{shown}\u{201d} does not read back the same"
+                )));
+            }
+            Ok(written)
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_collects_list_that_would_not_read_back_is_refused() {
+        assert!(check(Kind::Collects, "# 0#(", 2026).is_err());
+        assert_eq!(
+            check(Kind::Collects, "Robot Tales (1954) 1-3", 2026),
+            Ok("Robot Tales (1954) 1\u{2013}3".into())
+        );
+    }
+
+    #[test]
+    fn a_refused_value_is_quoted_cleaned_and_short() {
+        let refused = format!("\u{202E}nine  teen{}", " fifty".repeat(100));
+        let why = check(Kind::Year, &refused, 2026).unwrap_err();
+        assert!(!why.contains('\u{202E}'), "{why}");
+        assert!(why.contains("\u{201c}nine teen fifty"), "{why}");
+        assert!(why.chars().count() < 100, "{why}");
+    }
 
     const YEAR: u16 = 2026;
 
