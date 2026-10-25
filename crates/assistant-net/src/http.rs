@@ -228,6 +228,33 @@ fn safe_path(path: &str) -> bool {
             .all(|b| b.is_ascii_graphic() && !matches!(b, b'#' | b'@' | b'\\'))
 }
 
+/// The request as the HTTP library takes it. Its header values are marked
+/// sensitive, so the library never shows them, as one holds the API key;
+/// its copies of them cannot be wiped, which [`Request`]'s own can.
+fn built(request: Request) -> Result<http::Request<Vec<u8>>, NetError> {
+    let uri: Uri = format!("https://{}{}", request.host.name(), request.path)
+        .parse()
+        .map_err(|_| NetError::Refused)?;
+    if !allowed(&uri) || uri.host() != Some(request.host.name()) {
+        return Err(NetError::Refused);
+    }
+    let mut builder = http::Request::builder()
+        .method(match request.method {
+            Method::Get => http::Method::GET,
+            Method::Post => http::Method::POST,
+        })
+        .uri(uri);
+    for (name, value) in &request.headers {
+        let mut value =
+            http::HeaderValue::from_str(value).map_err(|_| NetError::Invalid("a header value"))?;
+        value.set_sensitive(true);
+        builder = builder.header(*name, value);
+    }
+    builder
+        .body(request.body.unwrap_or_default())
+        .map_err(|_| NetError::Refused)
+}
+
 /// The HTTPS client, made once and shared by the providers' clients.
 #[derive(Clone)]
 pub struct Client {
@@ -278,23 +305,7 @@ impl Client {
         {
             return Err(NetError::TooLarge);
         }
-        let uri: Uri = format!("https://{}{}", request.host.name(), request.path)
-            .parse()
-            .map_err(|_| NetError::Refused)?;
-        if !allowed(&uri) || uri.host() != Some(request.host.name()) {
-            return Err(NetError::Refused);
-        }
-        let mut builder = http::Request::builder()
-            .method(match request.method {
-                Method::Get => http::Method::GET,
-                Method::Post => http::Method::POST,
-            })
-            .uri(uri);
-        for (name, value) in &request.headers {
-            builder = builder.header(*name, value.as_str());
-        }
-        let body = request.body.unwrap_or_default();
-        let built = builder.body(body).map_err(|_| NetError::Refused)?;
+        let built = built(request)?;
         let mut response = self.agent.run(built).map_err(net_error)?;
         let status = response.status().as_u16();
         if (300..400).contains(&status) {
@@ -419,6 +430,21 @@ mod tests {
         let shown = format!("{request:?}");
         assert!(shown.contains("x-api-key"));
         assert!(!shown.contains("TESTONLY"));
+    }
+
+    #[test]
+    fn the_library_is_never_shown_the_key_in_the_clear() {
+        let request = Request {
+            host: Host::Anthropic,
+            method: Method::Post,
+            path: "/v1/messages".into(),
+            headers: vec![("x-api-key", Zeroizing::new("sk-ant-TESTONLY".into()))],
+            body: None,
+        };
+        let built = built(request).unwrap();
+        let value = &built.headers()["x-api-key"];
+        assert!(value.is_sensitive());
+        assert!(!format!("{built:?}").contains("TESTONLY"));
     }
 
     #[test]
