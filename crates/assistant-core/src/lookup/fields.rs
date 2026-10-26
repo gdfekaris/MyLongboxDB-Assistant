@@ -264,14 +264,16 @@ pub const FIELDS: &[Field] = &[
 pub(crate) fn house_style(key: &str, text: &str) -> String {
     let text = text.trim();
     match key {
-        // The catalogue's spaced hyphen stands for the title's slash.
+        // The catalogue's spaced hyphen stands for the title's slash,
+        // which the collection writes unspaced.
         "series" => match text.get(..4) {
             Some(the) if the.eq_ignore_ascii_case("the ") && text.len() > 4 => {
                 text[4..].trim_start().to_owned()
             }
             _ => text.to_owned(),
         }
-        .replace(" - ", "/"),
+        .replace(" - ", "/")
+        .replace(" / ", "/"),
         "publisher" if text.contains(';') => {
             let names: Vec<String> = text
                 .split(';')
@@ -505,6 +507,10 @@ mod tests {
         assert_eq!(
             house_style("series", "Batman - Spawn: War Devil"),
             "Batman/Spawn: War Devil"
+        );
+        assert_eq!(
+            house_style("series", "Spider-Man / Ultimate Universe"),
+            "Spider-Man/Ultimate Universe"
         );
         assert_eq!(house_style("story_title", "The End"), "The End");
         assert_eq!(
