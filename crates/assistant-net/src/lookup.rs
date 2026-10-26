@@ -92,7 +92,8 @@ impl AnthropicLookup<'_> {
     }
 
     /// Sends a request, letting a paused answer go on until it finishes,
-    /// and returns the last answer with what all of them used.
+    /// and returns the whole answer, every part of it, with what all of
+    /// them used.
     fn send(
         &self,
         mut request: MessageRequest,
@@ -105,6 +106,7 @@ impl AnthropicLookup<'_> {
                 Err(e) => return (Err(failure(e)), usage),
             };
             usage = usage.plus(message.usage);
+            let message = joined(std::mem::take(&mut request.resume), message);
             if message.stop != Stop::PauseTurn {
                 return (Ok(message), usage);
             }
@@ -117,6 +119,15 @@ impl AnthropicLookup<'_> {
             usage,
         )
     }
+}
+
+/// An answer that went on after a pause, whole: the parts before the
+/// pause, then its own. They hold the pages its citations point back to,
+/// and the whole is what a further pause sends back.
+fn joined(mut before: Vec<serde_json::Value>, mut message: Message) -> Message {
+    before.append(&mut message.content);
+    message.content = before;
+    message
 }
 
 /// A request's photos, then its text: models read a photo better with
@@ -322,6 +333,22 @@ mod tests {
                 Part::Text("The first photo is the front cover.".into()),
             ]
         );
+    }
+
+    #[test]
+    fn an_answer_that_went_on_after_a_pause_is_kept_whole() {
+        let part = |n: u8| serde_json::json!({"type": "text", "text": n.to_string()});
+        let mut first = message(Stop::PauseTurn);
+        first.content = vec![part(1)];
+        let first = joined(Vec::new(), first);
+        let mut second = message(Stop::PauseTurn);
+        second.content = vec![part(2)];
+        let second = joined(first.content, second);
+        let mut last = message(Stop::EndTurn);
+        last.content = vec![part(3)];
+        let last = joined(second.content, last);
+        assert_eq!(last.content, [part(1), part(2), part(3)]);
+        assert_eq!(last.text(), "123");
     }
 
     #[test]
