@@ -651,6 +651,9 @@ impl AddPage {
         self.problems.borrow_mut().clear();
         self.show_photos();
         self.text.buffer().set_text("");
+        // Emptying text that is already empty does not count as a change,
+        // so after a run of photos alone the count would stay behind.
+        self.refresh();
     }
 }
 
