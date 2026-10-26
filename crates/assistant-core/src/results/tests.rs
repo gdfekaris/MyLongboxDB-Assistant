@@ -272,6 +272,21 @@ fn results_from_before_photos_were_kept_still_read() {
 }
 
 #[test]
+fn a_source_s_lines_are_kept_and_each_cleaned() {
+    let mut books = books();
+    books[0].draft.sources[0].cited_text = "Series: Robot Tales\nIssue: #1".into();
+    let mut file: Json = serde_json::from_str(&to_json(&books)).unwrap();
+    file["books"][0]["sources"][0]["cited_text"] =
+        json!("Series: Robot\u{202e} Tales\n\n  Issue:   #1  ");
+    let read = from_json(&file.to_string(), YEAR).unwrap();
+    assert_eq!(
+        read[0].draft.sources[0].cited_text,
+        "Series: Robot Tales\nIssue: #1"
+    );
+    assert_eq!(from_json(&to_json(&books), YEAR).unwrap(), books);
+}
+
+#[test]
 fn a_book_marked_reviewed_stays_marked() {
     let mut books = books();
     assert!(!books[0].reviewed);

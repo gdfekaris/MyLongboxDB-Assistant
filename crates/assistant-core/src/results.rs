@@ -317,6 +317,19 @@ fn clean(text: &str) -> String {
     crate::lookup::clean(text, MAX_TEXT)
 }
 
+/// Text made safe to show line by line, keeping its lines, as a record
+/// from the owner's catalogue copy has them.
+fn clean_lines(text: &str) -> String {
+    text.lines()
+        .map(clean)
+        .filter(|line| !line.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
+        .chars()
+        .take(MAX_TEXT)
+        .collect()
+}
+
 fn entries(
     saved: Vec<SavedEntry>,
     sources: usize,
@@ -351,7 +364,7 @@ fn book(saved: Saved, this_year: u16, photo: &dyn Fn(&str) -> Option<Photo>) -> 
         .map(|s| Source {
             url: clean(&s.url),
             title: clean(&s.title),
-            cited_text: clean(&s.cited_text),
+            cited_text: clean_lines(&s.cited_text),
         })
         .collect();
     let identity = match saved.identity.as_str() {
