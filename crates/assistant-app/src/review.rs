@@ -121,10 +121,26 @@ fn offered(key: &str) -> bool {
 
 fn confidence_label(c: Confidence) -> String {
     match c {
-        Confidence::High => gettext("sure"),
-        Confidence::Medium => gettext("fairly sure"),
-        Confidence::Low => gettext("unsure"),
+        Confidence::High => gettext("Sure"),
+        Confidence::Medium => gettext("Fairly sure"),
+        Confidence::Low => gettext("Unsure"),
     }
+}
+
+/// How sure the lookup was of a value, as a coloured word beside it, so
+/// it can be seen at a glance down the page.
+fn confidence_badge(c: Confidence) -> gtk::Label {
+    let colour = match c {
+        Confidence::High => "success",
+        Confidence::Medium => "warning",
+        Confidence::Low => "error",
+    };
+    gtk::Label::builder()
+        .label(confidence_label(c))
+        .valign(gtk::Align::Center)
+        .tooltip_text(gettext("How sure the lookup is"))
+        .css_classes(["caption-heading", colour])
+        .build()
 }
 
 /// A page's site, from its address, for showing where a value came from.
@@ -133,36 +149,22 @@ fn site(url: &str) -> &str {
     rest.split(['/', '?', '#']).next().unwrap_or(rest)
 }
 
-/// Where a value came from, in a line or two.
-fn provenance(
-    source: Option<usize>,
-    sources: &[Source],
-    confidence: Confidence,
-    note: &str,
-) -> String {
+/// Where a value came from, in a line or two. How sure the lookup was
+/// is shown beside it, by [`confidence_badge`].
+fn provenance(source: Option<usize>, sources: &[Source], note: &str) -> String {
     let mut lines = Vec::new();
     match source.and_then(|i| sources.get(i)) {
         Some(s) if s.url == COVER_PHOTO => {
-            lines.push(gettext_f(
-                "From your cover photo ({confidence})",
-                &[("confidence", &confidence_label(confidence))],
-            ));
+            lines.push(gettext("From your cover photo"));
             if !s.cited_text.is_empty() {
                 lines.push(format!("\u{201c}{}\u{201d}", s.cited_text));
             }
         }
-        Some(s) if s.url == KNOWLEDGE => lines.push(gettext_f(
-            "From Claude's knowledge, not a page ({confidence})",
-            &[("confidence", &confidence_label(confidence))],
-        )),
+        Some(s) if s.url == KNOWLEDGE => {
+            lines.push(gettext("From Claude's knowledge, not a page"));
+        }
         Some(s) => {
-            lines.push(gettext_f(
-                "From {site} ({confidence})",
-                &[
-                    ("site", site(&s.url)),
-                    ("confidence", &confidence_label(confidence)),
-                ],
-            ));
+            lines.push(gettext_f("From {site}", &[("site", site(&s.url))]));
             if !s.cited_text.is_empty() {
                 lines.push(format!("\u{201c}{}\u{201d}", s.cited_text));
             }
@@ -189,14 +191,19 @@ fn plain_row(title: &str, subtitle: &str) -> adw::ActionRow {
     row
 }
 
-/// A row with a tick for accepting what it shows.
+/// A row with a tick for accepting what it shows, and how sure the
+/// lookup was of it when it came from the lookup.
 fn accept_row(
     title: &str,
     subtitle: &str,
+    confidence: Option<Confidence>,
     accepted: bool,
     on_toggle: impl Fn(bool) + 'static,
 ) -> adw::ActionRow {
     let row = plain_row(title, subtitle);
+    if let Some(confidence) = confidence {
+        row.add_suffix(&confidence_badge(confidence));
+    }
     let check = gtk::CheckButton::builder()
         .active(accepted)
         .valign(gtk::Align::Center)
@@ -235,8 +242,9 @@ fn value_row(
             &format!(
                 "{}\n{}",
                 shown_value(key, &value.text),
-                provenance(value.source, sources, value.confidence, &value.note)
+                provenance(value.source, sources, &value.note)
             ),
+            value.source.map(|_| value.confidence),
             value.accepted,
             move |on| emit(ReviewMsg::AcceptValue(index, key, on)),
         )
@@ -281,14 +289,15 @@ fn entry_rows(
                 }
                 Detail::Part(None) => String::new(),
             };
-            let source = provenance(e.source, sources, e.confidence, &e.note);
+            let source = provenance(e.source, sources, &e.note);
             let subtitle = if detail.is_empty() {
                 source
             } else {
                 format!("{detail}\n{source}")
             };
             let emit = emit.clone();
-            accept_row(&e.name, &subtitle, e.accepted, move |on| {
+            let confidence = e.source.map(|_| e.confidence);
+            accept_row(&e.name, &subtitle, confidence, e.accepted, move |on| {
                 emit(ReviewMsg::AcceptEntry(index, list, n, on));
             })
         })
