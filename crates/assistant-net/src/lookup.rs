@@ -36,8 +36,21 @@ fn failure(error: NetError) -> Failure {
         NetError::Status {
             status: 401..=403, ..
         } => Failure::Refused(error.to_string()),
+        // Anthropic reports a workspace's spend limit and a low credit
+        // balance as a bad request, which every later request repeats.
+        NetError::Status {
+            status: 400,
+            ref message,
+            ..
+        } if spent_out(message) => Failure::Refused(error.to_string()),
         other => Failure::Failed(other.to_string()),
     }
+}
+
+/// Whether a provider's message says the account can spend no more.
+fn spent_out(message: &str) -> bool {
+    let message = message.to_lowercase();
+    message.contains("usage limit") || message.contains("credit balance")
 }
 
 fn sources(citations: Vec<Citation>) -> Vec<Source> {
@@ -363,6 +376,18 @@ mod tests {
             retry_after: None,
         });
         assert!(matches!(other, Failure::Failed(_)));
+        for message in [
+            "You have reached your specified API usage limits. You will regain access on 2026-11-01 at 00:00 UTC.",
+            "Your credit balance is too low to access the Anthropic API.",
+        ] {
+            let spent = failure(NetError::Status {
+                status: 400,
+                kind: "invalid_request_error".into(),
+                message: message.into(),
+                retry_after: None,
+            });
+            assert!(matches!(spent, Failure::Refused(_)), "{message}");
+        }
     }
 
     #[test]
