@@ -24,20 +24,21 @@ const FULL_MONTHS: [&str; 12] = [
 
 /// A month's short name, as shown, for months numbered 1 to 12.
 fn month_name(month: u8) -> String {
-    let context = "month abbreviation";
+    // The context is written out in each call, as xgettext reads only
+    // literal strings.
     match month {
-        1 => pgettext(context, "Jan"),
-        2 => pgettext(context, "Feb"),
-        3 => pgettext(context, "Mar"),
-        4 => pgettext(context, "Apr"),
-        5 => pgettext(context, "May"),
-        6 => pgettext(context, "Jun"),
-        7 => pgettext(context, "Jul"),
-        8 => pgettext(context, "Aug"),
-        9 => pgettext(context, "Sep"),
-        10 => pgettext(context, "Oct"),
-        11 => pgettext(context, "Nov"),
-        _ => pgettext(context, "Dec"),
+        1 => pgettext("month abbreviation", "Jan"),
+        2 => pgettext("month abbreviation", "Feb"),
+        3 => pgettext("month abbreviation", "Mar"),
+        4 => pgettext("month abbreviation", "Apr"),
+        5 => pgettext("month abbreviation", "May"),
+        6 => pgettext("month abbreviation", "Jun"),
+        7 => pgettext("month abbreviation", "Jul"),
+        8 => pgettext("month abbreviation", "Aug"),
+        9 => pgettext("month abbreviation", "Sep"),
+        10 => pgettext("month abbreviation", "Oct"),
+        11 => pgettext("month abbreviation", "Nov"),
+        _ => pgettext("month abbreviation", "Dec"),
     }
 }
 

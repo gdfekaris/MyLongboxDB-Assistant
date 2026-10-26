@@ -48,55 +48,57 @@ pub enum ReviewMsg {
 type Emit = Rc<dyn Fn(ReviewMsg)>;
 
 fn role_label(role: Role) -> String {
-    gettext(match role {
-        Role::Writer => "Writer",
-        Role::Artist => "Artist",
-        Role::Penciller => "Penciller",
-        Role::Inker => "Inker",
-        Role::Colorist => "Colorist",
-        Role::Letterer => "Letterer",
-        Role::CoverArtist => "Cover artist",
-        Role::Editor => "Editor",
-        Role::Article => "Article",
-        Role::Interview => "Interview",
-    })
+    match role {
+        Role::Writer => gettext("Writer"),
+        Role::Artist => gettext("Artist"),
+        Role::Penciller => gettext("Penciller"),
+        Role::Inker => gettext("Inker"),
+        Role::Colorist => gettext("Colorist"),
+        Role::Letterer => gettext("Letterer"),
+        Role::CoverArtist => gettext("Cover artist"),
+        Role::Editor => gettext("Editor"),
+        Role::Article => gettext("Article"),
+        Role::Interview => gettext("Interview"),
+    }
 }
 
 /// What a field's edit window says about it: the form it takes, where
 /// that is not plain, in a line.
 pub fn field_help(key: &str) -> String {
-    gettext(match key {
-        "series" => "Without its start year or volume, and without a leading The.",
-        "start_year" => "The year of the series' first issue, such as 1963.",
-        "issue_number" => "Such as 300 or 1/2, or nn for a book with no number.",
-        "volume" => "Only where the publisher numbers the series as a volume.",
-        "publisher" => "Such as Marvel Comics or DC.",
-        "imprint" => "Such as Vertigo or Epic.",
-        "category" => "comic, magazine, or collected.",
-        "magazine_format" => "standard, treasury, or digest.",
-        "black_and_white" => "yes or no.",
-        "known_issue_count" => "Only for a series that has ended.",
-        "legacy_number" => "Only where the publisher printed one.",
-        "story_title" => "The main story's title, as printed.",
-        "cover_date" => "Such as Apr 1990, or just the year.",
-        "release_date" => "Such as 1990-02-13.",
-        "page_count" => "Including the covers.",
-        "synopsis" => "A few short sentences.",
-        "key_issue" => "yes or no.",
-        "key_reason" => "Such as: 1st appearance of Venom.",
-        "cover_price" => "In US dollars, such as 1.50.",
-        "canadian_cover_price" => "In Canadian dollars, such as 2.00.",
-        "isbn" => "The 13-digit ISBN.",
-        "binding" => "hardcover, softcover, or oversized_hardcover.",
-        "collects" => "Such as: Watchmen (1986) 1-12.",
-        "variant" => "Such as Facsimile or KRS Comics Exclusive. Blank for the standard cover.",
-        "variant_cover_artists" => "Separate names with semicolons.",
-        "printing" => "1 for the first printing, 2 for the second.",
-        "distribution" => "direct or newsstand.",
-        "published" => "When this printing came out, such as 1992-06.",
-        "barcode" => "Every digit, add-on included.",
-        _ => "",
-    })
+    match key {
+        "series" => gettext("Without its start year or volume, and without a leading The."),
+        "start_year" => gettext("The year of the series' first issue, such as 1963."),
+        "issue_number" => gettext("Such as 300 or 1/2, or nn for a book with no number."),
+        "volume" => gettext("Only where the publisher numbers the series as a volume."),
+        "publisher" => gettext("Such as Marvel Comics or DC."),
+        "imprint" => gettext("Such as Vertigo or Epic."),
+        "category" => gettext("comic, magazine, or collected."),
+        "magazine_format" => gettext("standard, treasury, or digest."),
+        "black_and_white" => gettext("yes or no."),
+        "known_issue_count" => gettext("Only for a series that has ended."),
+        "legacy_number" => gettext("Only where the publisher printed one."),
+        "story_title" => gettext("The main story's title, as printed."),
+        "cover_date" => gettext("Such as Apr 1990, or just the year."),
+        "release_date" => gettext("Such as 1990-02-13."),
+        "page_count" => gettext("Including the covers."),
+        "synopsis" => gettext("A few short sentences."),
+        "key_issue" => gettext("yes or no."),
+        "key_reason" => gettext("Such as: 1st appearance of Venom."),
+        "cover_price" => gettext("In US dollars, such as 1.50."),
+        "canadian_cover_price" => gettext("In Canadian dollars, such as 2.00."),
+        "isbn" => gettext("The 13-digit ISBN."),
+        "binding" => gettext("hardcover, softcover, or oversized_hardcover."),
+        "collects" => gettext("Such as: Watchmen (1986) 1-12."),
+        "variant" => gettext(
+            "Such as Okazaki cover, Facsimile, or KRS Comics exclusive. Blank for the standard cover.",
+        ),
+        "variant_cover_artists" => gettext("Separate names with semicolons."),
+        "printing" => gettext("1 for the first printing, 2 for the second."),
+        "distribution" => gettext("direct or newsstand."),
+        "published" => gettext("When this printing came out, such as 1992-06."),
+        "barcode" => gettext("Every digit, add-on included."),
+        _ => String::new(),
+    }
 }
 
 /// A value as the review page shows it.
@@ -118,11 +120,11 @@ fn offered(key: &str) -> bool {
 }
 
 fn confidence_label(c: Confidence) -> String {
-    gettext(match c {
-        Confidence::High => "sure",
-        Confidence::Medium => "fairly sure",
-        Confidence::Low => "unsure",
-    })
+    match c {
+        Confidence::High => gettext("sure"),
+        Confidence::Medium => gettext("fairly sure"),
+        Confidence::Low => gettext("unsure"),
+    }
 }
 
 /// A page's site, from its address, for showing where a value came from.
