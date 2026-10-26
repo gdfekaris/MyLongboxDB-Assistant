@@ -715,8 +715,75 @@ pub fn look_up_covers(
     first_printing(&mut draft, &reading);
     printed_number(&mut draft, &reading);
     undated_cover(&mut draft, &reading);
+    facsimile(&mut draft, &reading);
     variant_name(&mut draft);
     Ok(draft)
+}
+
+/// A facsimile is catalogued as the issue it reprints, with the dates of
+/// its own release: the owner leaves its cover date and cover prices
+/// blank, as its cover only reproduces the original's, and it is never a
+/// key. A release date no later than the original's year is the
+/// original's, so it is cleared; any other waits for the owner, as
+/// sources often give the original's.
+fn facsimile(draft: &mut Draft, reading: &Reading) {
+    let says = |text: &str| text.to_lowercase().contains("facsimile");
+    let marked = draft
+        .values
+        .iter()
+        .any(|v| v.key == "variant" && says(&v.text))
+        || reading.seen.iter().any(|s| says(&s.text));
+    if draft.identity != Identity::Identified || !marked {
+        return;
+    }
+    let year = |key: &str| {
+        draft
+            .values
+            .iter()
+            .find(|v| v.key == key)
+            .and_then(|v| v.text.get(..4))
+            .and_then(|y| y.parse::<u16>().ok())
+    };
+    let original = year("cover_date").or(year("start_year"));
+    for value in &mut draft.values {
+        match value.key {
+            "cover_date" | "cover_price" | "canadian_cover_price" if !value.text.is_empty() => {
+                value.text.clear();
+                value.source = None;
+                value.accepted = true;
+                value.note =
+                    "a facsimile: left blank, as its cover only reproduces the original's".into();
+            }
+            "key_issue" => {
+                value.text = "no".into();
+                value.source = None;
+                value.accepted = true;
+                value.note = "a facsimile is never a key".into();
+            }
+            "key_reason" => {
+                value.text.clear();
+                value.source = None;
+                value.accepted = true;
+                value.note.clear();
+            }
+            "release_date" | "published" if !value.text.is_empty() => {
+                let own_year = value.text.get(..4).and_then(|y| y.parse::<u16>().ok());
+                if own_year
+                    .zip(original)
+                    .is_some_and(|(own, first)| own <= first)
+                {
+                    value.text.clear();
+                    value.source = None;
+                    value.note = "the original's date, not the facsimile's".into();
+                } else {
+                    value.note =
+                        "check this is the facsimile's own date, not the original's".into();
+                }
+                value.accepted = false;
+            }
+            _ => {}
+        }
+    }
 }
 
 /// Variant names are the collection's own, more a habit than a rule, so

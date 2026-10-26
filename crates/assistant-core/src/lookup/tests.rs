@@ -882,6 +882,58 @@ fn a_series_is_named_without_the_year_in_its_title() {
 }
 
 #[test]
+fn a_facsimile_keeps_only_its_own_dates() {
+    let facsimile = |release: &str| {
+        let cover = read_answer(
+            true,
+            &[
+                ("title", "Astonishing Robot Tales", "front"),
+                ("issue_number", "1", "front"),
+                ("cover_date", "MARCH 1954", "front"),
+                ("variant", "Facsimile Edition", "front, top"),
+            ],
+        );
+        let provider = Scripted::new(vec![
+            answered(cover),
+            researched(2),
+            answered(photo_structured(&[
+                ("start_year", value("1954", 1, "high")),
+                ("cover_date", value("1954-03", 1, "high")),
+                ("cover_price", value("0.10", 1, "high")),
+                ("release_date", value(release, 2, "high")),
+                ("published", value("1992", 2, "high")),
+                ("key_issue", value("yes", 1, "high")),
+                ("key_reason", value("1st appearance of Tinman.", 1, "high")),
+                ("variant", value("Facsimile", 1, "high")),
+            ])),
+            no_problems(),
+        ]);
+        run_covers(&provider, false).0.unwrap()
+    };
+    let draft = facsimile("1954-01-12");
+    let v = |key| draft.value(key).unwrap().clone();
+    // Its cover only reproduces the original's date and price.
+    assert_eq!(v("cover_date").text, "");
+    assert_eq!(v("cover_price").text, "");
+    assert_eq!(v("key_issue").text, "no");
+    assert_eq!(v("key_reason").text, "");
+    // The original's release date is no use; the facsimile's waits.
+    assert_eq!(v("release_date").text, "");
+    assert!(v("release_date").note.contains("original"));
+    assert_eq!(v("published").text, "1992");
+    assert!(!v("published").accepted);
+    let book = draft.book(YEAR).unwrap();
+    assert!(!book.issue.is_key);
+    assert_eq!(book.edition.cover_price_cents, None);
+
+    let draft = facsimile("1992-06-01");
+    let release = draft.value("release_date").unwrap();
+    assert_eq!(release.text, "1992-06-01");
+    assert!(!release.accepted);
+    assert!(release.note.contains("facsimile's own"));
+}
+
+#[test]
 fn an_annual_is_its_own_series() {
     let annual = read_answer(
         true,
