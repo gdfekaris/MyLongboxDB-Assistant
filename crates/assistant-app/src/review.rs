@@ -9,7 +9,7 @@ use std::rc::Rc;
 
 use adw::prelude::*;
 use assistant_core::lookup::{
-    COVER_PHOTO, Detail, Draft, Entry, FIELDS, Identity, KNOWLEDGE, Source, Value,
+    COVER_PHOTO, Detail, Draft, Entry, FIELDS, Identity, KNOWLEDGE, Kind, Source, Value, spec,
 };
 use assistant_core::model::{Confidence, Role};
 use assistant_core::results::ReviewBook;
@@ -241,6 +241,10 @@ fn value_row(
             move |on| emit(ReviewMsg::AcceptValue(index, key, on)),
         )
     };
+    // Notes are a few sentences, shown whole.
+    if spec(key).is_some_and(|f| f.kind == Kind::LongText) {
+        row.set_subtitle_lines(0);
+    }
     row.add_suffix(&edit_button(index, key, emit));
     row
 }

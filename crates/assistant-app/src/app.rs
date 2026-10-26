@@ -250,33 +250,74 @@ impl App {
         let Some(field) = assistant_core::lookup::spec(key) else {
             return;
         };
-        let entry = adw::EntryRow::builder()
-            .title(gettext(field.label))
-            .activates_default(true)
-            .build();
-        match typed {
-            Some(typed) => entry.set_text(typed),
-            None => entry.set_text(&crate::review::shown_value(
+        let shown = match typed {
+            Some(typed) => typed.to_owned(),
+            None => crate::review::shown_value(
                 key,
                 book.draft.value(key).map_or("", |v| v.text.as_str()),
-            )),
-        }
-        let list = gtk::ListBox::builder()
-            .selection_mode(gtk::SelectionMode::None)
-            .css_classes(["boxed-list"])
-            .build();
-        list.append(&entry);
+            ),
+        };
+        // A few sentences are edited as a paragraph, the rest on a line.
+        let (editor, focus, text): (gtk::Widget, gtk::Widget, Box<dyn Fn() -> String>) =
+            if field.kind == assistant_core::lookup::Kind::LongText {
+                let view = gtk::TextView::builder()
+                    .wrap_mode(gtk::WrapMode::WordChar)
+                    .accepts_tab(false)
+                    .top_margin(8)
+                    .bottom_margin(8)
+                    .left_margin(8)
+                    .right_margin(8)
+                    .build();
+                view.buffer().set_text(&shown);
+                // Wide enough that a paragraph reads as one.
+                let frame = gtk::Frame::builder()
+                    .width_request(520)
+                    .child(
+                        &gtk::ScrolledWindow::builder()
+                            .min_content_height(200)
+                            .hscrollbar_policy(gtk::PolicyType::Never)
+                            .child(&view)
+                            .build(),
+                    )
+                    .build();
+                let buffer = view.buffer();
+                (
+                    frame.upcast(),
+                    view.upcast(),
+                    Box::new(move || {
+                        buffer
+                            .text(&buffer.start_iter(), &buffer.end_iter(), false)
+                            .to_string()
+                    }),
+                )
+            } else {
+                let entry = adw::EntryRow::builder()
+                    .title(gettext(field.label))
+                    .activates_default(true)
+                    .build();
+                entry.set_text(&shown);
+                let list = gtk::ListBox::builder()
+                    .selection_mode(gtk::SelectionMode::None)
+                    .css_classes(["boxed-list"])
+                    .build();
+                list.append(&entry);
+                (
+                    list.upcast(),
+                    entry.clone().upcast(),
+                    Box::new(move || entry.text().to_string()),
+                )
+            };
         let dialog = adw::AlertDialog::builder()
             .heading(gettext_f(
                 "Edit {field}",
                 &[("field", &gettext(field.label))],
             ))
             .body(crate::review::field_help(key))
-            .extra_child(&list)
+            .extra_child(&editor)
             .close_response("cancel")
             .default_response("save")
             .build();
-        dialog.set_property("focus-widget", &entry);
+        dialog.set_property("focus-widget", &focus);
         dialog.add_responses(&[("cancel", &gettext("_Cancel")), ("save", &gettext("_Save"))]);
         dialog.set_response_appearance("save", adw::ResponseAppearance::Suggested);
         let sender = self.sender.clone();
@@ -285,7 +326,7 @@ impl App {
             None::<&gio::Cancellable>,
             move |response| {
                 if response == "save" {
-                    sender.input(AppMsg::Edited(index, key, entry.text().to_string()));
+                    sender.input(AppMsg::Edited(index, key, text()));
                 }
             },
         );
