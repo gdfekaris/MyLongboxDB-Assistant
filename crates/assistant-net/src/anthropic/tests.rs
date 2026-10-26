@@ -13,6 +13,7 @@ fn request() -> MessageRequest {
         user: vec![Part::Jpeg(JPEG.to_vec()), Part::Text("Front cover.".into())],
         resume: Vec::new(),
         web_search: None,
+        web_fetch: None,
         schema: None,
         effort: None,
     }
@@ -76,6 +77,33 @@ fn web_search_is_the_server_tool_with_its_limits() {
 }
 
 #[test]
+fn pages_are_read_whole_only_from_the_named_sites_and_cited() {
+    let mut read = request();
+    read.web_search = Some(WebSearch {
+        max_uses: 8,
+        ..WebSearch::default()
+    });
+    read.web_fetch = Some(WebFetch {
+        max_uses: 4,
+        allowed_domains: vec!["marvel.fandom.com".into()],
+        max_content_tokens: 10_000,
+    });
+    let body = request_body(&read).unwrap();
+    assert_eq!(
+        body["tools"][1],
+        json!({
+            "type": "web_fetch_20260209",
+            "name": "web_fetch",
+            "max_uses": 4,
+            "allowed_domains": ["marvel.fandom.com"],
+            "max_content_tokens": 10_000,
+            "citations": {"enabled": true},
+            "allowed_callers": ["direct"],
+        })
+    );
+}
+
+#[test]
 fn a_schema_goes_in_output_config() {
     let mut structured = request();
     structured.schema = Some(Schema {
@@ -121,6 +149,21 @@ fn requests_the_app_must_not_make_are_refused() {
         blocked_domains: vec!["b.example".into()],
     });
     assert!(matches!(request_body(&domains), Err(NetError::Invalid(_))));
+
+    let mut fetch = WebFetch {
+        max_uses: 1,
+        allowed_domains: vec!["marvel.fandom.com".into()],
+        max_content_tokens: 1_000,
+    };
+    let mut alone = request();
+    alone.web_fetch = Some(fetch.clone());
+    assert!(matches!(request_body(&alone), Err(NetError::Invalid(_))));
+
+    fetch.allowed_domains.clear();
+    let mut anywhere = request();
+    anywhere.web_search = Some(WebSearch::default());
+    anywhere.web_fetch = Some(fetch);
+    assert!(matches!(request_body(&anywhere), Err(NetError::Invalid(_))));
 
     let mut png = request();
     png.user = vec![Part::Jpeg(b"\x89PNG\r\n".to_vec())];
@@ -329,4 +372,49 @@ mod properties {
             }
         }
     }
+}
+
+/// Shaped like the documented web fetch answer, as a live one came back:
+/// a page read whole is cited by its place among the pages read, and a
+/// page may have no title. The content is made up.
+#[test]
+fn a_page_read_whole_is_cited_by_its_place_among_the_pages_read() {
+    let read = |url: &str, title: Value| {
+        json!({"type": "web_fetch_tool_result", "tool_use_id": "srvtoolu_2", "content": {
+            "type": "web_fetch_result", "url": url, "retrieved_at": "2026-10-26T10:00:00Z",
+            "content": {"type": "document", "title": title, "citations": {"enabled": true},
+                        "source": {"type": "text", "media_type": "text/plain", "data": "Pencils: Joe Example"}}}})
+    };
+    let long = "Pencils: Joe Example. ".repeat(40);
+    let message = parsed(json!({
+        "id": "msg_1", "type": "message", "role": "assistant", "model": DEFAULT_MODEL,
+        "stop_reason": "end_turn",
+        "content": [
+            {"type": "web_fetch_tool_result", "tool_use_id": "srvtoolu_1", "content": {
+                "type": "web_fetch_tool_result_error", "error_code": "url_not_accessible"}},
+            read("https://marvel.fandom.com/wiki/Robot_Tales_Vol_1_1", Value::Null),
+            read("https://www.marvel.com/comics/issue/1/robot_tales_1", json!("Robot Tales #1 | Marvel")),
+            {"type": "text", "text": "Pencils by Joe Example", "citations": [
+                {"type": "char_location", "document_index": 2, "document_title": "Robot Tales #1 | Marvel",
+                 "start_char_index": 0, "end_char_index": 20, "cited_text": "Pencils: Joe Example"},
+                {"type": "char_location", "document_index": 1, "document_title": null,
+                 "start_char_index": 0, "end_char_index": 880, "cited_text": long},
+                {"type": "char_location", "document_index": 7, "document_title": "Nowhere",
+                 "start_char_index": 0, "end_char_index": 1, "cited_text": "x"}
+            ]}
+        ],
+        "usage": {"input_tokens": 9000, "output_tokens": 400, "server_tool_use": {"web_fetch_requests": 3}}
+    }));
+    let pages = message.citations();
+    assert_eq!(pages.len(), 2);
+    assert_eq!(
+        pages[0].url,
+        "https://www.marvel.com/comics/issue/1/robot_tales_1"
+    );
+    assert_eq!(pages[0].title, "Robot Tales #1 | Marvel");
+    assert_eq!(pages[0].cited_text, "Pencils: Joe Example");
+    // Without a title, a page goes by its address; a long passage is cut.
+    assert_eq!(pages[1].title, pages[1].url);
+    assert_eq!(pages[1].cited_text.chars().count(), 401);
+    assert_eq!(message.marked_text(), "Pencils by Joe Example [1] [2]");
 }

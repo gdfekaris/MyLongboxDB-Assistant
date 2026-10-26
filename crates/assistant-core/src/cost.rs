@@ -216,24 +216,39 @@ pub struct Planned {
     pub most_searches: u64,
     /// Input tokens each search's results add.
     pub tokens_per_search: u64,
+    pub likely_pages: u64,
+    /// The request's limit on pages read whole.
+    pub most_pages: u64,
+    /// Input tokens each page read whole adds; reading one is otherwise
+    /// free.
+    pub tokens_per_page: u64,
     /// Images priced on their own, where the provider does.
     pub images: u64,
 }
 
 impl Planned {
     pub fn estimate(&self, price: &Price) -> Estimate {
-        let usage = |output: u64, searches: u64| Usage {
+        let usage = |output: u64, searches: u64, pages: u64| Usage {
             input_tokens: self
                 .input_tokens
-                .saturating_add(searches.saturating_mul(self.tokens_per_search)),
+                .saturating_add(searches.saturating_mul(self.tokens_per_search))
+                .saturating_add(pages.saturating_mul(self.tokens_per_page)),
             output_tokens: output,
             searches,
             images: self.images,
             ..Usage::default()
         };
         Estimate {
-            likely: price.cost(&usage(self.likely_output_tokens, self.likely_searches)),
-            most: price.cost(&usage(self.most_output_tokens, self.most_searches)),
+            likely: price.cost(&usage(
+                self.likely_output_tokens,
+                self.likely_searches,
+                self.likely_pages,
+            )),
+            most: price.cost(&usage(
+                self.most_output_tokens,
+                self.most_searches,
+                self.most_pages,
+            )),
         }
     }
 }
@@ -360,11 +375,16 @@ mod tests {
             likely_searches: 3,
             most_searches: 5,
             tokens_per_search: 4000,
+            likely_pages: 1,
+            most_pages: 2,
+            tokens_per_page: 3000,
             images: 0,
         };
         let estimate = planned.estimate(&opus);
-        let likely = (5000 + 3 * 4000) * 4_000_000 + 2000 * 20_000_000 + 3 * 10_000_000_000;
-        let most = (5000 + 5 * 4000) * 4_000_000 + 16_000 * 20_000_000 + 5 * 10_000_000_000;
+        // Reading a page costs only its tokens.
+        let likely = (5000 + 3 * 4000 + 3000) * 4_000_000 + 2000 * 20_000_000 + 3 * 10_000_000_000;
+        let most =
+            (5000 + 5 * 4000 + 2 * 3000) * 4_000_000 + 16_000 * 20_000_000 + 5 * 10_000_000_000;
         assert_eq!(estimate.likely, Picodollars(likely));
         assert_eq!(estimate.most, Picodollars(most));
         assert!(estimate.likely < estimate.most);

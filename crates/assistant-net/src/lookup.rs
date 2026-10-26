@@ -10,7 +10,7 @@ use assistant_core::lookup::{
     Source, Spent,
 };
 
-use crate::anthropic::{Anthropic, Message, MessageRequest, Stop, WebSearch};
+use crate::anthropic::{Anthropic, Message, MessageRequest, Stop, WebFetch, WebSearch};
 use crate::http::NetError;
 use crate::openrouter::{self, Answer, ChatRequest, Finish, OpenRouter};
 use crate::provider::{Citation, Effort, Part, Schema};
@@ -19,6 +19,19 @@ use crate::provider::{Citation, Effort, Part, Schema};
 const MAX_CONTINUATIONS: usize = 5;
 /// Results each OpenRouter search returns.
 const RESULTS_PER_SEARCH: u32 = 5;
+/// The sites whose pages the research may read whole: the comics wikis
+/// and the publishers' own issue pages. The Grand Comics Database, the
+/// best of them, turns automated readers away, so it is read only as
+/// search results show it.
+pub const READ_SITES: [&str; 5] = [
+    "marvel.fandom.com",
+    "dc.fandom.com",
+    "marvel.com",
+    "dc.com",
+    "imagecomics.com",
+];
+/// The most tokens kept of one page read whole: a wiki's issue page fits.
+const PAGE_TOKENS: u32 = 10_000;
 
 fn effort(effort: LookupEffort) -> Effort {
     match effort {
@@ -153,6 +166,11 @@ impl Provider for AnthropicLookup<'_> {
                     max_uses: request.max_searches,
                     ..WebSearch::default()
                 }),
+                web_fetch: (request.max_pages > 0).then(|| WebFetch {
+                    max_uses: request.max_pages,
+                    allowed_domains: READ_SITES.map(str::to_owned).to_vec(),
+                    max_content_tokens: PAGE_TOKENS,
+                }),
                 schema: None,
                 effort: Some(effort(request.effort)),
             },
@@ -180,6 +198,7 @@ impl Provider for AnthropicLookup<'_> {
                 user: parts(&request.images, &request.user),
                 resume: Vec::new(),
                 web_search: None,
+                web_fetch: None,
                 schema: Some(Schema {
                     name: request.name,
                     schema: request.schema.clone(),

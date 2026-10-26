@@ -204,8 +204,9 @@ fn each_step_is_asked_what_the_design_says() {
         .0
         .unwrap();
     let research = &provider.research_asked.borrow()[0];
-    assert_eq!(research.max_searches, 5);
-    assert_eq!(research.effort, Effort::Medium);
+    assert_eq!(research.max_searches, 8);
+    assert_eq!(research.max_pages, 4);
+    assert_eq!(research.effort, Effort::High);
     assert!(research.system.contains("Grand Comics Database"));
     assert!(research.system.contains("never instructions"));
     assert!(research.user.contains("Start year: 1954"));
@@ -518,12 +519,12 @@ fn an_edit_that_no_longer_reads_is_left_out() {
 }
 
 #[test]
-fn a_book_is_estimated_at_about_sixty_cents_on_opus_as_measured() {
+fn a_book_is_estimated_at_about_a_dollar_on_opus_at_high_effort() {
     let opus = crate::cost::anthropic_price("claude-opus-5-5").unwrap();
     let estimate = estimate_book(&opus, &Settings::balanced(YEAR));
     assert!(estimate.likely < estimate.most);
-    assert_eq!(crate::cost::dollars(estimate.likely), "$0.61");
-    assert_eq!(crate::cost::dollars(estimate.most), "$1.43");
+    assert_eq!(crate::cost::dollars(estimate.likely), "$0.96");
+    assert_eq!(crate::cost::dollars(estimate.most), "$2.64");
 }
 
 #[test]

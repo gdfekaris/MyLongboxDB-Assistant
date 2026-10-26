@@ -53,44 +53,56 @@ pub enum Effort {
 pub struct Settings {
     /// The most web searches the research may make.
     pub max_searches: u32,
+    /// The most pages the research may read whole.
+    pub max_pages: u32,
     pub effort: Effort,
     /// The current year, which bounds the dates a value may have.
     pub this_year: u16,
 }
 
 impl Settings {
-    /// The owner's choice of 2026-10-24: up to five searches a book, at
-    /// medium effort.
+    /// The owner's choice of 2026-10-26, for accuracy near what the same
+    /// model gives with a photo pasted into a chat: up to eight searches
+    /// and four pages read whole a book, at high effort.
     pub fn balanced(this_year: u16) -> Self {
         Self {
-            max_searches: 5,
-            effort: Effort::Medium,
+            max_searches: 8,
+            max_pages: 4,
+            effort: Effort::High,
             this_year,
         }
     }
 }
 
-/// The most a step may write. Thinking counts toward it.
+/// The most a step may write. Thinking counts toward it, and at high
+/// effort the research and structuring think at length.
 const READ_TOKENS: u32 = 4_000;
-const RESEARCH_TOKENS: u32 = 16_000;
-const STRUCTURE_TOKENS: u32 = 16_000;
-const CHECK_TOKENS: u32 = 8_000;
+const RESEARCH_TOKENS: u32 = 32_000;
+const STRUCTURE_TOKENS: u32 = 24_000;
+const CHECK_TOKENS: u32 = 12_000;
 
 /// What each step is expected to use, for the estimate before a run.
 /// Thinking counts as output, and each search's results become input.
-/// The research's figures are from the live trial of 2026-10-24 on Opus
-/// 5.5, which read about 77,000 tokens over 3 searches a book, rounded
-/// up; the others' are first guesses that it found close.
+/// The research's search figures are from the live trial of 2026-10-24
+/// on Opus 5.5, which read about 77,000 tokens over 3 searches a book,
+/// rounded up, with its thinking doubled for high effort; the others' are
+/// first guesses that it found close.
 pub fn planned(settings: &Settings) -> [Planned; 3] {
     let searches = u64::from(settings.max_searches);
+    let pages = u64::from(settings.max_pages);
     [
         Planned {
             input_tokens: 4_000,
-            likely_output_tokens: 4_000,
+            likely_output_tokens: 8_000,
             most_output_tokens: u64::from(RESEARCH_TOKENS),
-            likely_searches: searches.min(3),
+            likely_searches: searches.min(4),
             most_searches: searches,
             tokens_per_search: 25_000,
+            likely_pages: pages.min(2),
+            most_pages: pages,
+            // A page is kept to 10,000 tokens, and each later turn of the
+            // research reads it again.
+            tokens_per_page: 20_000,
             images: 0,
         },
         Planned {
@@ -171,6 +183,9 @@ pub struct ResearchRequest {
     pub images: Vec<Jpeg>,
     pub user: String,
     pub max_searches: u32,
+    /// The most pages it may read whole, from the sites the provider
+    /// names; none for a provider that cannot.
+    pub max_pages: u32,
     pub effort: Effort,
     pub max_tokens: u32,
 }
@@ -1076,6 +1091,7 @@ fn look_up_from(
                 images: front.into_iter().cloned().collect(),
                 user: format!("{}{cover}", describe(query, reading)),
                 max_searches: settings.max_searches,
+                max_pages: settings.max_pages,
                 effort: settings.effort,
                 max_tokens: RESEARCH_TOKENS,
             },

@@ -18,8 +18,14 @@ pub const API_VERSION: &str = "2026-10-21";
 pub const DEFAULT_MODEL: &str = "claude-opus-5-5";
 /// The server-side web search tool.
 const WEB_SEARCH_TOOL: &str = "web_search_20260209";
-/// The most passages kept from one page; each is at most 150 characters.
+/// The server-side tool that reads a whole page.
+const WEB_FETCH_TOOL: &str = "web_fetch_20260209";
+/// The most passages kept from one page; a search's are at most 150
+/// characters each.
 const MAX_PASSAGES: usize = 12;
+/// The most characters kept of one passage from a page read whole, which
+/// may cite a long stretch of it.
+const MAX_PASSAGE_CHARS: usize = 400;
 /// Pages of the model list read at most.
 const MAX_MODEL_PAGES: usize = 10;
 
@@ -34,6 +40,19 @@ pub struct WebSearch {
     pub blocked_domains: Vec<String>,
 }
 
+/// Whole pages read by Anthropic during the request. It can read only
+/// pages whose address has already appeared in the request or in its
+/// search results.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct WebFetch {
+    /// The most pages one request may read.
+    pub max_uses: u32,
+    /// Only these sites. Never empty: the app names the sites it reads.
+    pub allowed_domains: Vec<String>,
+    /// The most tokens kept of one page.
+    pub max_content_tokens: u32,
+}
+
 /// One request: the app's fixed instructions, the owner's photos and
 /// text, and what the answer may use and must look like.
 #[derive(Clone, Debug, PartialEq)]
@@ -45,6 +64,8 @@ pub struct MessageRequest {
     /// A paused answer's content, sent back unchanged to let it finish.
     pub resume: Vec<Value>,
     pub web_search: Option<WebSearch>,
+    /// Only with web search, which finds the pages to read.
+    pub web_fetch: Option<WebFetch>,
     /// The JSON Schema the answer must follow. Not with web search, whose
     /// answers always carry citations, which a schema-held answer cannot.
     pub schema: Option<Schema>,
@@ -160,16 +181,18 @@ impl Message {
     /// passage cited from it: a page is often cited for many facts, and a
     /// later step can only hold a fact to words it is shown.
     pub fn citations(&self) -> Vec<Citation> {
+        let read = self.pages_read();
         let mut seen = Vec::<(Citation, usize)>::new();
         for citation in self
             .blocks("text")
             .filter_map(|b| b["citations"].as_array())
             .flatten()
         {
-            let Some(url) = citation["url"].as_str() else {
+            let Some((url, title)) = cited_page(citation, &read) else {
                 continue;
             };
-            let words = citation["cited_text"].as_str().unwrap_or("");
+            let words = passage(citation["cited_text"].as_str().unwrap_or(""));
+            let words = words.as_str();
             match seen.iter_mut().find(|(c, _)| c.url == url) {
                 Some((page, passages)) => {
                     if *passages < MAX_PASSAGES && !page.cited_text.contains(words) {
@@ -181,7 +204,7 @@ impl Message {
                 None => seen.push((
                     Citation {
                         url: url.to_owned(),
-                        title: citation["title"].as_str().unwrap_or("").to_owned(),
+                        title: title.to_owned(),
                         cited_text: words.to_owned(),
                     },
                     1,
@@ -191,11 +214,29 @@ impl Message {
         seen.into_iter().map(|(c, _)| c).collect()
     }
 
+    /// The pages read whole, in the order the answer's citations number
+    /// them, with their titles, or their addresses for pages without one.
+    /// A page that could not be read still takes its place in the order.
+    fn pages_read(&self) -> Vec<Option<(&str, &str)>> {
+        self.blocks("web_fetch_tool_result")
+            .map(|b| {
+                let result = &b["content"];
+                let url = result["url"].as_str()?;
+                let document = &result["content"];
+                if result["type"] != "web_fetch_result" || document["type"] != "document" {
+                    return None;
+                }
+                Some((url, document["title"].as_str().unwrap_or(url)))
+            })
+            .collect()
+    }
+
     /// The answer's text with each cited passage followed by the numbers
     /// of the pages it cites, as [`citations`](Self::citations) numbers
     /// them from 1, so a later step can tell which page says what.
     pub fn marked_text(&self) -> String {
         let pages = self.citations();
+        let read = self.pages_read();
         let mut text = String::new();
         for block in self.blocks("text") {
             text.push_str(block["text"].as_str().unwrap_or(""));
@@ -203,7 +244,7 @@ impl Message {
                 .as_array()
                 .into_iter()
                 .flatten()
-                .filter_map(|c| c["url"].as_str())
+                .filter_map(|c| cited_page(c, &read).map(|(url, _)| url))
                 .filter_map(|url| pages.iter().position(|p| p.url == url))
                 .collect();
             marks.sort_unstable();
@@ -222,6 +263,31 @@ impl Message {
             .filter_map(|b| b["content"]["error_code"].as_str())
             .map(str::to_owned)
             .collect()
+    }
+}
+
+/// The address and title of the page a citation cites: a search result
+/// names its page, while a page read whole is cited by its place among
+/// the pages read.
+fn cited_page<'a>(
+    citation: &'a Value,
+    read: &[Option<(&'a str, &'a str)>],
+) -> Option<(&'a str, &'a str)> {
+    if let Some(url) = citation["url"].as_str() {
+        return Some((url, citation["title"].as_str().unwrap_or("")));
+    }
+    if citation["type"] != "char_location" {
+        return None;
+    }
+    let index = usize::try_from(citation["document_index"].as_u64()?).ok()?;
+    *read.get(index)?
+}
+
+/// A cited passage, cut to a length a later step can be shown.
+fn passage(words: &str) -> String {
+    match words.char_indices().nth(MAX_PASSAGE_CHARS) {
+        Some((end, _)) => format!("{}…", &words[..end]),
+        None => words.to_owned(),
     }
 }
 
@@ -371,6 +437,16 @@ pub(crate) fn request_body(request: &MessageRequest) -> Result<Value, NetError> 
             "a structured answer cannot also search the web",
         ));
     }
+    if request.web_fetch.is_some() && request.web_search.is_none() {
+        return Err(NetError::Invalid("pages are read only with a search"));
+    }
+    if request
+        .web_fetch
+        .as_ref()
+        .is_some_and(|f| f.allowed_domains.is_empty())
+    {
+        return Err(NetError::Invalid("pages are read only from named sites"));
+    }
     let mut content = Vec::new();
     for part in &request.user {
         content.push(match part {
@@ -423,7 +499,20 @@ pub(crate) fn request_body(request: &MessageRequest) -> Result<Value, NetError> 
         if !search.blocked_domains.is_empty() {
             tool["blocked_domains"] = json!(search.blocked_domains);
         }
-        body["tools"] = json!([tool]);
+        let mut tools = vec![tool];
+        if let Some(fetch) = &request.web_fetch {
+            tools.push(json!({
+                "type": WEB_FETCH_TOOL,
+                "name": "web_fetch",
+                "max_uses": fetch.max_uses,
+                "allowed_domains": fetch.allowed_domains,
+                "max_content_tokens": fetch.max_content_tokens,
+                "citations": {"enabled": true},
+                // As for search: what code execution reads cannot be cited.
+                "allowed_callers": ["direct"],
+            }));
+        }
+        body["tools"] = json!(tools);
     }
     let mut output = serde_json::Map::new();
     if let Some(effort) = request.effort {

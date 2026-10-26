@@ -5,7 +5,7 @@
 use super::fields::FIELDS;
 
 /// Raised with every change to the texts below.
-pub const PROMPT_VERSION: &str = "2026-10-26.2";
+pub const PROMPT_VERSION: &str = "2026-10-26.3";
 
 /// The read step, for photos: what is printed on the covers, and nothing
 /// looked up or remembered. The items to report follow it.
@@ -50,6 +50,11 @@ one you half remember, and never one a reliable page contradicts.
 - Prefer reference databases, above all the Grand Comics Database \
 (comics.org), then publishers' own sites and established wikis. Shops, \
 auctions, and forums are weak sources; say so when a fact rests on one.
+- Where a search finds the issue's own page on a site you can read \
+whole, such as the Marvel or DC Database wiki at fandom.com or the \
+publisher's site, read it with web_fetch before reporting credits, \
+story titles, and characters: such a page lists them in full where a \
+search shows a few lines. Cite the page you read.
 - The owner may abbreviate the series (ASM is Amazing Spider-Man) or \
 leave out its start year or volume. If more than one series or volume \
 could be meant, list each candidate with its publisher and start year. \

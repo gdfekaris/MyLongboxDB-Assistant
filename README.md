@@ -102,6 +102,12 @@ later version, but this version never contacts it.
 - **Sent to Anthropic:** each cover photo you add, re-encoded from its
   pixels so it carries no EXIF, GPS, or other metadata; the series and
   issue lines you type; and the app's fixed instructions.
+- **Looked up at Anthropic:** to research a book, the model searches
+  the web and may read whole issue pages from the Marvel and DC wikis
+  at marvel.fandom.com and dc.fandom.com and from marvel.com, dc.com,
+  and imagecomics.com (the `READ_SITES` constant in
+  `crates/assistant-net/src/lookup.rs`). Anthropic's servers do the
+  searching and reading; the app itself never fetches a web page.
 - **Never sent:** your MyLongboxDB collection, file names, or anything
   about your computer beyond what any HTTPS request carries.
 
@@ -204,16 +210,17 @@ authors.
 - **What the model says is not trusted.** Each answer must match a
   strict schema, which refuses unknown fields, wrong types, and
   oversized lists. A value is kept only if it cites a page the
-  provider's web search actually returned, what was read from your own
-  cover, or the model's own knowledge, and a separate check step
-  compares each value with what its source says. A value from the
-  model's knowledge, with no page behind it, says so on the review
-  page, and is ticked only when the model is sure of it. Every value then passes the checks MyLongboxDB's
-  import applies, and nothing a model says can choose a file, a host,
-  or a setting. You review everything before export, and values you
-  leave unticked are left out. Verify with
-  `cargo test -p assistant-core`, and with the CI job that imports the
-  app's exports using MyLongboxDB's own code at a pinned release.
+  provider's web search or page reading actually returned, what was read
+  from your own cover, or the model's own knowledge, and a separate
+  check step compares each value with what its source says. A value from
+  the model's knowledge, with no page behind it, says so on the review
+  page, and is ticked only when the model is sure of it. Every value
+  then passes the checks MyLongboxDB's import applies, and nothing a
+  model says can choose a file, a host, or a setting. You review
+  everything before export, and values you leave unticked are left out.
+  Verify with `cargo test -p assistant-core`, and with the CI job that
+  imports the app's exports using MyLongboxDB's own code at a pinned
+  release.
 - **No telemetry, crash reports, or update checks.** The app can reach
   only the two provider hosts above, so there is nowhere else for them
   to go. Verify with `cargo test -p assistant-net`, and with
