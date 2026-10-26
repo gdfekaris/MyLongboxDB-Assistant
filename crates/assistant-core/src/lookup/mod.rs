@@ -323,10 +323,43 @@ fn describe(query: &BookQuery, reading: Option<&Reading>) -> String {
     )
 }
 
+/// The address given to the source that stands for what the model knows
+/// without a page. It has a space, so no web page's address can be the
+/// same.
+pub const KNOWLEDGE: &str = "model knowledge";
+
+/// The source cited for what the model knows of an issue without a page
+/// saying it, as it knows who drew a famous cover.
+fn knowledge() -> Source {
+    Source {
+        url: KNOWLEDGE.into(),
+        title: "The model's own knowledge".into(),
+        cited_text: String::new(),
+    }
+}
+
+/// Whether a value from this source can go into the export without the
+/// owner's look: one from a page or the cover unless the model doubts
+/// it, one from its own knowledge only when it is sure.
+fn trusted(source: &Source, confidence: Confidence) -> bool {
+    if source.url == KNOWLEDGE {
+        confidence == Confidence::High
+    } else {
+        confidence != Confidence::Low
+    }
+}
+
 /// The research notes and numbered sources, for the later steps.
 fn notes(research: &Research) -> String {
     let mut text = format!("Research notes:\n<<<\n{}\n>>>\n\nSources:\n", research.text);
     for (n, source) in research.sources.iter().enumerate() {
+        if source.url == KNOWLEDGE {
+            text.push_str(&format!(
+                "[{}] Your own knowledge, for what the notes mark [knowledge]\n",
+                n + 1
+            ));
+            continue;
+        }
         text.push_str(&format!(
             "[{}] {} — {}\n    shows: \"{}\"\n",
             n + 1,
@@ -397,7 +430,7 @@ fn entries<T>(
                 source: Some(source),
                 confidence,
                 note: String::new(),
-                accepted: confidence != Confidence::Low,
+                accepted: trusted(&sources[source], confidence),
             })
         })
         .collect()
@@ -435,6 +468,24 @@ fn read_structured(
         story_arcs: Vec::new(),
         research: clean(&research.text, 20_000),
     };
+    let candidates: Vec<Candidate> = answer
+        .identification
+        .candidates
+        .into_iter()
+        .take(10)
+        .map(|c| Candidate {
+            series: clean(&c.series, MAX_NAME),
+            start_year: check(Kind::Year, &c.start_year, settings.this_year)
+                .ok()
+                .and_then(|y| y.parse().ok()),
+            volume: check(Kind::Ordinal, &c.volume, settings.this_year)
+                .ok()
+                .and_then(|v| v.parse().ok()),
+            publisher: clean(&c.publisher, MAX_NAME),
+            why: clean(&c.why, 500),
+        })
+        .filter(|c| !c.series.is_empty())
+        .collect();
     match answer.identification.status {
         Status::Identified => {}
         Status::NotFound => {
@@ -442,24 +493,6 @@ fn read_structured(
             return Ok(draft);
         }
         Status::Ambiguous => {
-            let candidates = answer
-                .identification
-                .candidates
-                .into_iter()
-                .take(10)
-                .map(|c| Candidate {
-                    series: clean(&c.series, MAX_NAME),
-                    start_year: check(Kind::Year, &c.start_year, settings.this_year)
-                        .ok()
-                        .and_then(|y| y.parse().ok()),
-                    volume: check(Kind::Ordinal, &c.volume, settings.this_year)
-                        .ok()
-                        .and_then(|v| v.parse().ok()),
-                    publisher: clean(&c.publisher, MAX_NAME),
-                    why: clean(&c.why, 500),
-                })
-                .filter(|c| !c.series.is_empty())
-                .collect();
             draft.identity = Identity::Ambiguous(candidates);
             return Ok(draft);
         }
@@ -491,7 +524,8 @@ fn read_structured(
                         Some(source) => {
                             value.text = text;
                             value.source = Some(source);
-                            value.accepted = !field.judgment && value.confidence != Confidence::Low;
+                            value.accepted =
+                                !field.judgment && trusted(&sources[source], value.confidence);
                         }
                     },
                 }
@@ -499,6 +533,7 @@ fn read_structured(
         }
         draft.values.push(value);
     }
+    chosen_series(&mut draft, &candidates);
     let category = draft
         .value("category")
         .and_then(|v| Category::from_code(&v.text))
@@ -533,9 +568,44 @@ fn read_structured(
     Ok(draft)
 }
 
+/// A book the research found in the likeliest of several series, as a
+/// line without a year often is, waits for the owner to confirm the
+/// series, named with the others it could have been.
+fn chosen_series(draft: &mut Draft, candidates: &[Candidate]) {
+    let year = draft
+        .value("start_year")
+        .and_then(|v| v.text.parse::<u16>().ok());
+    let others: Vec<String> = candidates
+        .iter()
+        .filter(|c| c.start_year != year || year.is_none())
+        .map(|c| match c.start_year {
+            Some(y) => format!("{} ({y})", c.series),
+            None => c.series.clone(),
+        })
+        .collect();
+    if others.is_empty() {
+        return;
+    }
+    let note = format!(
+        "the likeliest of several series; it could also be {}",
+        others.join(", ")
+    );
+    for value in draft
+        .values
+        .iter_mut()
+        .filter(|v| matches!(v.key, "series" | "start_year" | "volume") && !v.text.is_empty())
+    {
+        value.accepted = false;
+        value.note = note.clone();
+    }
+}
+
 /// The values the check step is shown, each with a key it can answer by.
 fn checked_values(draft: &Draft) -> String {
     let source = |s: Option<usize>| match s {
+        Some(i) if draft.sources[i].url == KNOWLEDGE => {
+            format!("source [{}]: the model's own knowledge, no page", i + 1)
+        }
         Some(i) => format!("source [{}]: \"{}\"", i + 1, draft.sources[i].cited_text),
         None => "no source".into(),
     };
@@ -844,6 +914,45 @@ fn undated_cover(draft: &mut Draft, reading: &Reading) {
     }
 }
 
+/// For a typed line, whose cover is not seen: most covers from 2000 on
+/// print no month, and the collection then dates them by the month they
+/// went on sale. The owner looks, as their cover may print one.
+fn sale_month(draft: &mut Draft) {
+    if draft.identity != Identity::Identified {
+        return;
+    }
+    let Some(release) = draft
+        .values
+        .iter()
+        .find(|v| v.key == "release_date" && v.text.len() >= 7)
+        .cloned()
+    else {
+        return;
+    };
+    let modern = release
+        .text
+        .get(..4)
+        .and_then(|y| y.parse::<u16>().ok())
+        .is_some_and(|y| y >= SALE_DATED_FROM);
+    let month = &release.text[..7];
+    let Some(value) = draft
+        .values
+        .iter_mut()
+        .find(|v| v.key == "cover_date" && v.text != month)
+    else {
+        return;
+    };
+    if modern {
+        value.text = month.to_owned();
+        value.source = release.source;
+        value.confidence = release.confidence;
+        value.accepted = false;
+        value.note = "the month it went on sale, as most covers from 2000 on print none: \
+                      use the month on your cover if it prints one"
+            .into();
+    }
+}
+
 /// Whether a date read from a cover gives its month, as in Mar 1954 or
 /// 3/54, not only a year.
 fn prints_month(printed: &str) -> bool {
@@ -958,7 +1067,7 @@ fn look_up_from(
         provider.research(
             &ResearchRequest {
                 system: format!(
-                    "{}{}{}{}and its credits, characters, teams, and story arcs, each with the page that says so.\n",
+                    "{}{}{}{}and its credits, characters, teams, and story arcs, each with the page that says so or marked [knowledge].\n",
                     prompts::RESEARCH,
                     edition,
                     prompts::REPORT,
@@ -992,13 +1101,16 @@ fn look_up_from(
         return Err(LookupError::Failed(Failure::Cancelled));
     }
     // The research's pages keep the first numbers, which its notes mark
-    // their passages with; the covers' items follow.
-    let research = match reading {
-        None => research,
-        Some(r) => Research {
-            sources: research.sources.into_iter().chain(r.sources()).collect(),
-            text: research.text,
-        },
+    // their passages with; the covers' items follow, then the model's own
+    // knowledge.
+    let research = Research {
+        sources: research
+            .sources
+            .into_iter()
+            .chain(reading.map(Reading::sources).unwrap_or_default())
+            .chain(std::iter::once(knowledge()))
+            .collect(),
+        text: research.text,
     };
     let json = reply(
         provider.answer(
@@ -1070,6 +1182,9 @@ fn look_up_from(
         value.text = fields::house_style(value.key, &value.text);
     }
     annual_series(&mut draft);
+    if from_text {
+        sale_month(&mut draft);
+    }
     year_only_date(&mut draft);
     titled_year(&mut draft);
     judgments(&mut draft);

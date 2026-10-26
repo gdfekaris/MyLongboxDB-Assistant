@@ -8,7 +8,9 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use adw::prelude::*;
-use assistant_core::lookup::{COVER_PHOTO, Detail, Draft, Entry, FIELDS, Identity, Source, Value};
+use assistant_core::lookup::{
+    COVER_PHOTO, Detail, Draft, Entry, FIELDS, Identity, KNOWLEDGE, Source, Value,
+};
 use assistant_core::model::{Confidence, Role};
 use assistant_core::results::ReviewBook;
 
@@ -147,6 +149,10 @@ fn provenance(
                 lines.push(format!("\u{201c}{}\u{201d}", s.cited_text));
             }
         }
+        Some(s) if s.url == KNOWLEDGE => lines.push(gettext_f(
+            "From Claude's knowledge, not a page ({confidence})",
+            &[("confidence", &confidence_label(confidence))],
+        )),
         Some(s) => {
             lines.push(gettext_f(
                 "From {site} ({confidence})",
@@ -463,7 +469,7 @@ fn book_content(index: usize, book: &ReviewBook, emit: &Emit) -> gtk::Box {
             .title(gettext("Sources"))
             .subtitle(gettext("The pages the lookup cited, shown as text"))
             .build();
-        for s in &draft.sources {
+        for s in draft.sources.iter().filter(|s| s.url != KNOWLEDGE) {
             expander.add_row(&plain_row(
                 &s.title,
                 &format!("{}\n{}", s.url, s.cited_text),

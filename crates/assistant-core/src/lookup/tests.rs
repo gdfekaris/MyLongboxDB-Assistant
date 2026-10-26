@@ -343,7 +343,9 @@ fn the_research_s_pages_are_cleaned_and_capped() {
         no_problems(),
     ]);
     let draft = run(&provider, "ART (1954) #1").0.unwrap();
-    assert_eq!(draft.sources.len(), 100);
+    // The pages kept, and the model's own knowledge after them.
+    assert_eq!(draft.sources.len(), 101);
+    assert_eq!(draft.sources[100].url, KNOWLEDGE);
     assert!(draft.sources.iter().all(|s| !s.title.contains('\u{202E}')));
     assert!(draft.sources.iter().all(|s| s.title.chars().count() <= 300));
     assert!(
@@ -356,7 +358,44 @@ fn the_research_s_pages_are_cleaned_and_capped() {
     // The later steps are shown the cleaned pages too.
     let asked = provider.answers_asked.borrow();
     assert!(!asked[0].user.contains('\u{202E}'));
-    assert!(!asked[0].user.contains("[101]"));
+    assert!(!asked[0].user.contains("page-101"));
+}
+
+#[test]
+fn what_the_model_knows_counts_only_when_it_is_sure() {
+    let mut answer = structured(&[
+        ("series", value("Astonishing Robot Tales", 1, "high")),
+        // Source 3 is the model's own knowledge, after the two pages.
+        ("start_year", value("1954", 3, "high")),
+        ("cover_date", value("1954-03", 3, "medium")),
+        ("story_title", value("The Robot Who Read Comics", 3, "low")),
+    ]);
+    answer["credits"] = json!([
+        {"name": "Ada Sprocket", "role": "cover_artist", "source": 3, "confidence": "high"},
+        {"name": "Rex Rivet", "role": "inker", "source": 3, "confidence": "medium"}
+    ]);
+    let provider = Scripted::new(vec![researched(2), answered(answer), no_problems()]);
+    let draft = run(&provider, "ART #1").0.unwrap();
+    assert_eq!(draft.sources[2].url, KNOWLEDGE);
+    let v = |key| draft.value(key).unwrap();
+    assert_eq!(
+        (v("start_year").source, v("start_year").accepted),
+        (Some(2), true)
+    );
+    assert_eq!(v("cover_date").text, "1954-03");
+    assert!(!v("cover_date").accepted, "held unless the model is sure");
+    assert!(!v("story_title").accepted);
+    let held: Vec<bool> = draft.credits.iter().map(|c| c.accepted).collect();
+    assert_eq!(held, [true, false]);
+    // The later steps are told which source it is, and that it has no
+    // page to compare with.
+    let asked = provider.answers_asked.borrow();
+    assert!(asked[0].user.contains("[3] Your own knowledge"));
+    assert!(
+        asked[1]
+            .user
+            .contains("start_year: 1954 — source [3]: the model's own knowledge, no page")
+    );
 }
 
 #[test]
@@ -594,7 +633,8 @@ fn the_cover_is_read_and_then_looked_up_like_a_line() {
     assert_eq!(draft.query.number.as_str(), "1");
     assert_eq!(draft.query.line, 4);
     // The cover's items are sources, first, and values can cite them.
-    assert_eq!(draft.sources.len(), 8);
+    assert_eq!(draft.sources.len(), 9);
+    assert_eq!(draft.sources[8].url, KNOWLEDGE);
     assert_eq!(draft.sources[5].url, COVER_PHOTO);
     assert_eq!(draft.sources[5].cited_text, "10¢");
     assert_eq!(
@@ -1203,4 +1243,55 @@ mod properties {
             }
         }
     }
+}
+
+#[test]
+fn a_series_chosen_from_several_waits_for_the_owner() {
+    let mut answer = structured(&[
+        ("series", value("Astonishing Robot Tales", 1, "high")),
+        ("start_year", value("1954", 1, "high")),
+        ("publisher", value("Atomic Age", 1, "high")),
+    ]);
+    answer["identification"]["candidates"] = json!([
+        {"series": "Astonishing Robot Tales", "start_year": "1954", "volume": "", "publisher": "Atomic Age", "why": "the original"},
+        {"series": "Astonishing Robot Tales", "start_year": "2011", "volume": "", "publisher": "Atomic Age", "why": "a relaunch"}
+    ]);
+    let provider = Scripted::new(vec![researched(2), answered(answer), no_problems()]);
+    let draft = run(&provider, "ART #1").0.unwrap();
+    assert_eq!(draft.identity, Identity::Identified);
+    let v = |key| draft.value(key).unwrap();
+    assert!(!v("series").accepted);
+    assert!(!v("start_year").accepted);
+    assert!(
+        v("start_year")
+            .note
+            .contains("Astonishing Robot Tales (2011)"),
+        "{}",
+        v("start_year").note
+    );
+    assert!(!v("start_year").note.contains("(1954)"));
+    assert!(v("publisher").accepted);
+}
+
+#[test]
+fn a_typed_modern_book_is_dated_by_its_sale_month_for_the_owner_to_check() {
+    let answer = structured(&[
+        ("series", value("Astonishing Robot Tales", 1, "high")),
+        ("cover_date", value("2022-06", 1, "high")),
+        ("release_date", value("2022-04-13", 2, "high")),
+    ]);
+    let provider = Scripted::new(vec![researched(2), answered(answer), no_problems()]);
+    let draft = run(&provider, "ART #1").0.unwrap();
+    let date = draft.value("cover_date").unwrap();
+    assert_eq!(date.text, "2022-04");
+    assert!(!date.accepted);
+    // An older book keeps the catalogue's cover date.
+    let answer = structured(&[
+        ("cover_date", value("1965-12", 1, "high")),
+        ("release_date", value("1965-10-05", 2, "high")),
+    ]);
+    let provider = Scripted::new(vec![researched(2), answered(answer), no_problems()]);
+    let draft = run(&provider, "ART #1").0.unwrap();
+    let date = draft.value("cover_date").unwrap();
+    assert_eq!((date.text.as_str(), date.accepted), ("1965-12", true));
 }

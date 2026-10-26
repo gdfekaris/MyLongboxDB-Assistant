@@ -176,7 +176,7 @@ pub const FIELDS: &[Field] = &[
         "synopsis",
         "Notes About This Issue",
         Kind::LongText,
-        "A line or two in your own words on the main story, as short phrases or sentences each ending with a period, such as: Secret Wars II tie-in. Spider-Man in the black costume vs. the Puma, with the Beyonder. Never a semicolon, and a comma only where grammar needs one, never to join phrases.",
+        "Three or four short sentences in your own words about the issue: what happens in its main story, and what makes it notable, such as: Secret Wars II tie-in. Spider-Man in the black costume battles the Puma. The Beyonder looks on. Each ends with a period. Never a semicolon, and a comma only where grammar needs one, never to join phrases.",
     ),
     judgment(
         "key_issue",

@@ -204,9 +204,11 @@ authors.
 - **What the model says is not trusted.** Each answer must match a
   strict schema, which refuses unknown fields, wrong types, and
   oversized lists. A value is kept only if it cites a page the
-  provider's web search actually returned, or what was read from your
-  own cover, and a separate check step compares each value with what
-  its source says. Every value then passes the checks MyLongboxDB's
+  provider's web search actually returned, what was read from your own
+  cover, or the model's own knowledge, and a separate check step
+  compares each value with what its source says. A value from the
+  model's knowledge, with no page behind it, says so on the review
+  page, and is ticked only when the model is sure of it. Every value then passes the checks MyLongboxDB's
   import applies, and nothing a model says can choose a file, a host,
   or a setting. You review everything before export, and values you
   leave unticked are left out. Verify with
