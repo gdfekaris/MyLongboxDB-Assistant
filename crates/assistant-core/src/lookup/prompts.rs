@@ -5,7 +5,7 @@
 use super::fields::FIELDS;
 
 /// Raised with every change to the texts below.
-pub const PROMPT_VERSION: &str = "2026-10-26.3";
+pub const PROMPT_VERSION: &str = "2026-10-26.4";
 
 /// The read step, for photos: what is printed on the covers, and nothing
 /// looked up or remembered. The items to report follow it.
@@ -69,8 +69,10 @@ interview. Editors are the issue's own editors, never the \
 editor-in-chief. Use artist only when a source credits the art without saying \
 who pencilled and who inked; never split such a credit yourself.
 - For each role give only the main credit: leave out assistants, \
-assistant and associate editors, and anyone credited only for layouts, \
-breakdowns, finishes, or plot help. Name more than one person in a role \
+assistant and associate editors, and anyone credited only for plot \
+help. Where one artist drew breakdowns or layouts and another finished \
+them, the penciller is the one who drew the breakdowns; the finisher is \
+not a penciller, and is the inker only where they inked. Name more than one person in a role \
 only where the issue credits them as equals; where you cannot tell, \
 give the one credited first. The cover is the exception: its artists \
 are everyone who drew it, its penciller and its inker both.

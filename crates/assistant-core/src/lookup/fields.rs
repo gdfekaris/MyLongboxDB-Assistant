@@ -84,7 +84,7 @@ pub const FIELDS: &[Field] = &[
         "series",
         "Series",
         Kind::Text,
-        "The series' name as the Grand Comics Database or the publisher gives it, without its year or volume, and without a leading The. Keep a slash the title has, as in Batman/Spawn: War Devil, with its parts in the order the cover prints them. A translated edition goes by the title its own cover prints. A one-shot's own title, such as Giant Superhero Holiday Grab-Bag, is its story title, not part of the series.",
+        "The name the Grand Comics Database files the whole series under, or failing that the publisher's, without its year or volume, and without a leading The. Keep it even where this issue's cover logo or the publisher's site gives a longer title for some issues. Keep a slash the title has, as in Batman/Spawn: War Devil, with its parts in the order the cover prints them. A translated edition goes by the title its own cover prints. A one-shot's own title, such as Giant Superhero Holiday Grab-Bag, is its story title, not part of the series.",
     ),
     field(
         "start_year",
