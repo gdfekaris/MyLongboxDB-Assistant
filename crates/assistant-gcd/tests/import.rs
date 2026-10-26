@@ -215,3 +215,57 @@ fn the_index_is_private_and_checked_when_opened() {
     index(&dir).pragma_update(None, "user_version", 99).unwrap();
     assert_eq!(Catalog::open(&dir).unwrap_err(), CatalogError::Outdated);
 }
+
+/// The dump in a zip, as the GCD offers it for download, beside a
+/// readme.
+fn zipped(dir: &Path, dump: &Path, name: &str) -> std::path::PathBuf {
+    use std::io::Write;
+    let path = dir.join("current.zip");
+    let mut zip = zip::ZipWriter::new(std::fs::File::create(&path).unwrap());
+    let options = zip::write::SimpleFileOptions::default();
+    zip.start_file("README.txt", options).unwrap();
+    zip.write_all(b"Data from the Grand Comics Database")
+        .unwrap();
+    zip.start_file(name, options).unwrap();
+    zip.write_all(&std::fs::read(dump).unwrap()).unwrap();
+    zip.finish().unwrap();
+    path
+}
+
+#[test]
+fn a_dump_in_the_gcd_s_zip_is_read_from_it() {
+    let dir = folder("gcd-zip");
+    let db = dump(&dir, "");
+    let zip = zipped(&dir, &db, "2026-10-16.db");
+    std::fs::remove_file(&db).unwrap();
+    let mut steps = Vec::new();
+    let done = import(
+        &zip,
+        &dir,
+        &mut |s, _| steps.push(s),
+        &AtomicBool::new(false),
+    )
+    .unwrap();
+    assert_eq!(done.issues, 3);
+    assert_eq!(steps[0], Step::Unpacking);
+    // The dump taken out of the zip is not kept.
+    let left: Vec<String> = std::fs::read_dir(&dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    let mut left = left;
+    left.sort();
+    assert_eq!(left, ["current.zip", INDEX_FILE]);
+}
+
+#[test]
+fn a_zip_without_one_dump_is_refused() {
+    let dir = folder("gcd-zip-other");
+    let db = dump(&dir, "");
+    let zip = zipped(&dir, &db, "notes.txt");
+    assert_eq!(
+        import(&zip, &dir, &mut |_, _| {}, &AtomicBool::new(false)),
+        Err(ImportError::NotGcd("the zip holds no .db file".into()))
+    );
+    assert!(!dir.join(INDEX_FILE).exists());
+}

@@ -40,6 +40,14 @@ opt-level = 2
 [profile.dev.package.moxcms]
 opt-level = 2
 
+# Reading the owner's GCD dump, gigabytes of SQLite in a zip, unoptimized
+# takes minutes where it should take one.
+[profile.dev.package.libsqlite3-sys]
+opt-level = 3
+
+[profile.dev.package.zlib-rs]
+opt-level = 3
+
 # cargo-vet's audit records live with the other build files.
 [workspace.metadata.vet]
 store = { path = "./build-aux/supply-chain" }

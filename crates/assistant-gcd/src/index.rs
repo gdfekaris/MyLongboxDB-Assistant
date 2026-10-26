@@ -65,6 +65,9 @@ impl std::error::Error for ImportError {}
 /// A part of the import, in the order they run.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Step {
+    /// Taking the dump out of the zip the GCD offers it in; its progress
+    /// is in megabytes, the others' in rows.
+    Unpacking,
     Series,
     Issues,
     Stories,
@@ -408,14 +411,133 @@ fn dated(from: &Connection) -> Result<Option<Date>, ImportError> {
         .and_then(|d| d.parse::<Date>().ok()))
 }
 
-/// Reads the GCD dump at `dump` into a new index in `folder`, in place
-/// of any index there once it is complete; an import that fails or is
-/// cancelled leaves the earlier index as it was. Progress is reported as
-/// each step goes, by rows copied.
+/// What a zip file starts with.
+const ZIP_MAGIC: &[u8; 4] = b"PK\x03\x04";
+/// The dump taken out of the GCD's zip, kept beside the index only while
+/// it is read.
+const UNPACKED: &str = "gcd-dump.db";
+/// Bytes copied out of the zip between looks at whether the owner
+/// cancelled.
+const UNPACK_STEP: u64 = 64 * 1024 * 1024;
+
+fn is_zip(path: &Path) -> Result<bool, ImportError> {
+    use std::io::Read;
+    let mut start = [0; 4];
+    let mut file = std::fs::File::open(path)
+        .map_err(|e| ImportError::Unreadable(clean(&e.to_string(), 200)))?;
+    Ok(file.read_exact(&mut start).is_ok() && &start == ZIP_MAGIC)
+}
+
+fn clean(text: &str, max: usize) -> String {
+    assistant_core::lookup::clean(text, max)
+}
+
+/// Takes the one `.db` file out of the GCD's zip at `zip` into `folder`,
+/// no larger than a dump can be.
+fn unpack(
+    zip: &Path,
+    folder: &Path,
+    progress: &mut dyn FnMut(Step, u64),
+    cancel: &AtomicBool,
+) -> Result<std::path::PathBuf, ImportError> {
+    use std::io::{Read, Write};
+    let unreadable =
+        |e: &dyn std::fmt::Display| ImportError::Unreadable(clean(&e.to_string(), 200));
+    let file = std::fs::File::open(zip).map_err(|e| unreadable(&e))?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| unreadable(&e))?;
+    let mut dumps = Vec::new();
+    for n in 0..archive.len() {
+        let entry = archive.by_index(n).map_err(|e| unreadable(&e))?;
+        let named_db = entry
+            .enclosed_name()
+            .and_then(|p| p.extension().map(|e| e.eq_ignore_ascii_case("db")))
+            .unwrap_or(false);
+        if entry.is_file() && named_db {
+            dumps.push(n);
+        }
+    }
+    let [only] = dumps[..] else {
+        return Err(ImportError::NotGcd(if dumps.is_empty() {
+            "the zip holds no .db file".into()
+        } else {
+            "the zip holds more than one .db file".into()
+        }));
+    };
+    let entry = archive.by_index(only).map_err(|e| unreadable(&e))?;
+    if entry.size() > dump::MAX_DUMP_BYTES {
+        return Err(ImportError::TooLarge);
+    }
+    let partial = folder.join(format!("{UNPACKED}.partial"));
+    let written = (|| {
+        let mut out = std::fs::File::create(&partial).map_err(unwritable)?;
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&partial, std::fs::Permissions::from_mode(0o600))
+                .map_err(unwritable)?;
+        }
+        // The size a zip states is checked again as it is read, since it
+        // is the zip's own word.
+        let mut entry = entry.take(dump::MAX_DUMP_BYTES + 1);
+        let mut buffer = vec![0; 1024 * 1024];
+        let (mut total, mut reported) = (0u64, 0u64);
+        loop {
+            let n = entry.read(&mut buffer).map_err(|e| unreadable(&e))?;
+            if n == 0 {
+                break;
+            }
+            out.write_all(&buffer[..n]).map_err(unwritable)?;
+            total += n as u64;
+            if total > dump::MAX_DUMP_BYTES {
+                return Err(ImportError::TooLarge);
+            }
+            if total - reported >= UNPACK_STEP {
+                reported = total;
+                if cancel.load(Ordering::Relaxed) {
+                    return Err(ImportError::Cancelled);
+                }
+                progress(Step::Unpacking, total / (1024 * 1024));
+            }
+        }
+        out.sync_all().map_err(unwritable)?;
+        progress(Step::Unpacking, total / (1024 * 1024));
+        Ok(())
+    })();
+    if let Err(e) = written {
+        let _ = std::fs::remove_file(&partial);
+        return Err(e);
+    }
+    let unpacked = folder.join(UNPACKED);
+    std::fs::rename(&partial, &unpacked).map_err(unwritable)?;
+    Ok(unpacked)
+}
+
+/// Reads the GCD dump at `dump`, an SQLite file or the zip the GCD offers
+/// it in, into a new index in `folder`, in place of any index there once
+/// it is complete; an import that fails or is cancelled leaves the
+/// earlier index as it was. Progress is reported as each step goes. A
+/// dump in a zip is first taken out into `folder`, which needs room for
+/// it, and removed once read.
 ///
 /// The dump is untrusted, and this reads it through SQLite: call it on a
 /// thread limited to reading `dump` and writing in `folder`.
 pub fn import(
+    dump: &Path,
+    folder: &Path,
+    progress: &mut dyn FnMut(Step, u64),
+    cancel: &AtomicBool,
+) -> Result<Imported, ImportError> {
+    if !is_zip(dump)? {
+        return import_sqlite(dump, folder, progress, cancel);
+    }
+    // A dump taken out by an import that was stopped is not reused.
+    let _ = std::fs::remove_file(folder.join(UNPACKED));
+    let unpacked = unpack(dump, folder, progress, cancel)?;
+    let result = import_sqlite(&unpacked, folder, progress, cancel);
+    let _ = std::fs::remove_file(&unpacked);
+    result
+}
+
+fn import_sqlite(
     dump: &Path,
     folder: &Path,
     progress: &mut dyn FnMut(Step, u64),
