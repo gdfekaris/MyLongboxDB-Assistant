@@ -1091,6 +1091,52 @@ fn a_grading_label_gives_the_number_the_cover_does_not() {
     );
 }
 
+/// The distribution a photo lookup gives, with its note, for a cover
+/// whose barcode box shows `shown`, dated `date`, where the research said
+/// `said`.
+fn distributed(shown: &str, date: &str, said: &str) -> Value {
+    let provider = Scripted::new(vec![
+        answered(read_answer(
+            true,
+            &[
+                ("title", "Astonishing Robot Tales", "front"),
+                ("issue_number", "1", "front"),
+                ("barcode_box", shown, "front, bottom left"),
+            ],
+        )),
+        researched(2),
+        answered(photo_structured(&[
+            ("cover_date", value(date, 1, "high")),
+            ("distribution", value(said, 1, "medium")),
+        ])),
+        no_problems(),
+    ]);
+    let draft = run_covers(&provider, false).0.unwrap();
+    draft.value("distribution").unwrap().clone()
+}
+
+#[test]
+fn the_barcode_box_on_the_cover_tells_direct_from_newsstand() {
+    let plain = distributed("plain barcode", "1979-03", "");
+    assert_eq!(plain.text, "newsstand");
+    assert!(!plain.accepted);
+    assert!(plain.note.contains("barcode box"));
+    // Its source is what the cover showed.
+    assert!(plain.source.is_some());
+    assert_eq!(distributed("Direct Edition", "1992-11", "").text, "direct");
+    assert_eq!(distributed("NEWSSTAND", "2015-04", "").text, "newsstand");
+
+    // A plain barcode tells nothing from 2000 on, nor a box not shown.
+    assert_eq!(distributed("plain barcode", "2015-04", "").text, "");
+    assert_eq!(distributed("", "1979-03", "").text, "");
+
+    // Where the research says otherwise, the owner looks.
+    let other = distributed("plain barcode", "1979-03", "direct");
+    assert_eq!(other.text, "direct");
+    assert!(!other.accepted);
+    assert!(other.note.contains("newsstand"));
+}
+
 #[test]
 fn characters_go_by_the_names_they_are_known_by() {
     let mut answer = full_answer();

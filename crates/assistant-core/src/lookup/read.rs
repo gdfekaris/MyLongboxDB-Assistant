@@ -76,7 +76,7 @@ const ITEMS: &[(&str, &str, &str)] = &[
     (
         "barcode_box",
         "barcode box",
-        "The words in or beside the barcode box, such as Direct Edition, Direct Sales, or Newsstand, or what is pictured in place of a barcode.",
+        "What the barcode box shows: plain barcode when it holds a barcode with no words naming an edition; the words in or beside it, such as Direct Edition, Direct Sales, or Newsstand; or what is pictured in place of a barcode. no barcode when the cover has no barcode box at all. Blank only when the photos do not show the part of the cover where it would be.",
     ),
     (
         "variant",

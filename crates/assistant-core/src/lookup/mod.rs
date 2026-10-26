@@ -797,6 +797,7 @@ pub fn look_up_covers(
         spent,
     )?;
     compare_barcodes(&mut draft, &reading);
+    distribution_from_box(&mut draft, &reading);
     first_printing(&mut draft, &reading);
     printed_number(&mut draft, &reading);
     undated_cover(&mut draft, &reading);
@@ -1059,6 +1060,55 @@ fn compare_barcodes(draft: &mut Draft, reading: &Reading) {
             value.note = "the digits read from your cover fail the check digit".into();
         }
         None => {}
+    }
+}
+
+/// The year until which direct copies of US comics marked their barcode
+/// box, so that a plain barcode meant a newsstand copy.
+const MARKED_DIRECT_UNTIL: u16 = 2000;
+
+/// Direct or newsstand, as the barcode box the owner's cover shows tells
+/// it, where the lookup left it blank or said otherwise: a box that names
+/// its edition says which, and before about 2000 a US comic with a plain
+/// barcode was a newsstand copy, as direct copies marked the box.
+fn distribution_from_box(draft: &mut Draft, reading: &Reading) {
+    if draft.identity != Identity::Identified {
+        return;
+    }
+    let Some(seen) = reading.get("barcode_box") else {
+        return;
+    };
+    let shown = seen.text.trim().trim_end_matches('.').to_lowercase();
+    let year = draft
+        .values
+        .iter()
+        .filter(|v| matches!(v.key, "cover_date" | "release_date"))
+        .find_map(|v| v.text.get(..4)?.parse::<u16>().ok());
+    let distribution = if shown.contains("direct") {
+        "direct"
+    } else if shown.contains("newsstand")
+        || (shown == "plain barcode" && year.is_some_and(|y| y < MARKED_DIRECT_UNTIL))
+    {
+        "newsstand"
+    } else {
+        return;
+    };
+    let source = draft
+        .sources
+        .iter()
+        .position(|s| s.url == COVER_PHOTO && s.cited_text == seen.text);
+    let Some(value) = draft.values.iter_mut().find(|v| v.key == "distribution") else {
+        return;
+    };
+    if value.text.is_empty() {
+        value.text = distribution.into();
+        value.source = source;
+        value.confidence = Confidence::High;
+        value.accepted = false;
+        value.note = "from the barcode box on your cover".into();
+    } else if value.text != distribution {
+        value.accepted = false;
+        value.note = format!("your cover's barcode box suggests {distribution}");
     }
 }
 
