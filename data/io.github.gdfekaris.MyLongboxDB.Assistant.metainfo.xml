@@ -36,6 +36,21 @@
     <color type="primary" scheme_preference="dark">#a51d2d</color>
   </branding>
 
+  <releases>
+    <release version="0.1.0" date="2026-10-26">
+      <description>
+        <p>The first release: look up comic books from cover photos or typed lines, review them, and export them for MyLongboxDB.</p>
+        <ul>
+          <li>Add books by cover photo, iPhone HEIC included, or by typing a series and issue number, and turn, straighten, or crop a photo first</li>
+          <li>A Claude model from Anthropic, called with your own API key, reads the cover and looks the book up on the web, in the comics wikis, and in what it knows, saying where each detail came from</li>
+          <li>Values follow your collection's conventions, and anything doubtful, judged, or shared waits for your tick</li>
+          <li>Review every value with its source, then export the books, with your photos as their covers, as a MyLongboxDB full export</li>
+          <li>Your key is kept encrypted with a passphrase, or not at all, and photos are sent with no location or camera details</li>
+        </ul>
+      </description>
+    </release>
+  </releases>
+
   <content_rating type="oars-1.1"/>
 
   <requires>

@@ -12,8 +12,25 @@ The Assistant never opens your MyLongboxDB collection. MyLongboxDB
 itself stays offline; this separate app holds the network permission
 instead, and only ever sees the photos and text you give it.
 
-**Status:** in development. There is no release yet, and the app does
-not do anything useful so far.
+**Status:** 0.1.0 is the latest release. It is not on Flathub; install
+it from the Releases page as described below.
+
+## Installing
+
+Each release on the repository's Releases page has a Flatpak bundle and
+its SHA-256 checksum. Check the download, then install it:
+
+    sha256sum -c MyLongboxDB-Assistant-0.1.0.flatpak.sha256
+    flatpak install --user MyLongboxDB-Assistant-0.1.0.flatpak
+
+GitHub also keeps a signed statement, made by the repository's CI, that
+each bundle was built from the tagged source. With the GitHub CLI
+installed, check it with:
+
+    gh attestation verify MyLongboxDB-Assistant-0.1.0.flatpak --repo gdfekaris/MyLongboxDB-Assistant
+
+You need an Anthropic API key. Make one just for this app, in a
+workspace with a monthly spend limit, in the Claude Console.
 
 ## Building
 
