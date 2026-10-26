@@ -174,7 +174,7 @@ pub const FIELDS: &[Field] = &[
     ),
     field(
         "synopsis",
-        "Synopsis",
+        "Notes About This Issue",
         Kind::LongText,
         "A line or two in your own words on the main story, as short phrases or sentences each ending with a period, such as: Secret Wars II tie-in. Spider-Man in the black costume vs. the Puma, with the Beyonder. Never a semicolon, and a comma only where grammar needs one, never to join phrases.",
     ),

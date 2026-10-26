@@ -60,12 +60,59 @@ fn role_label(role: Role) -> String {
     })
 }
 
+/// What a field's edit window says about it: the form it takes, where
+/// that is not plain, in a line.
+pub fn field_help(key: &str) -> String {
+    gettext(match key {
+        "series" => "Without its start year or volume, and without a leading The.",
+        "start_year" => "The year of the series' first issue, such as 1963.",
+        "issue_number" => "Such as 300 or 1/2, or nn for a book with no number.",
+        "volume" => "Only where the publisher numbers the series as a volume.",
+        "publisher" => "Such as Marvel Comics or DC.",
+        "imprint" => "Such as Vertigo or Epic.",
+        "category" => "comic, magazine, or collected.",
+        "magazine_format" => "standard, treasury, or digest.",
+        "black_and_white" => "yes or no.",
+        "known_issue_count" => "Only for a series that has ended.",
+        "legacy_number" => "Only where the publisher printed one.",
+        "story_title" => "The main story's title, as printed.",
+        "cover_date" => "Such as Apr 1990, or just the year.",
+        "release_date" => "Such as 1990-02-13.",
+        "page_count" => "Including the covers.",
+        "synopsis" => "A few short sentences.",
+        "key_issue" => "yes or no.",
+        "key_reason" => "Such as: 1st appearance of Venom.",
+        "cover_price" => "In US dollars, such as 1.50.",
+        "canadian_cover_price" => "In Canadian dollars, such as 2.00.",
+        "isbn" => "The 13-digit ISBN.",
+        "binding" => "hardcover, softcover, or oversized_hardcover.",
+        "collects" => "Such as: Watchmen (1986) 1-12.",
+        "variant" => "Such as Facsimile or KRS Comics Exclusive. Blank for the standard cover.",
+        "variant_cover_artists" => "Separate names with semicolons.",
+        "printing" => "1 for the first printing, 2 for the second.",
+        "distribution" => "direct or newsstand.",
+        "published" => "When this printing came out, such as 1992-06.",
+        "barcode" => "Every digit, add-on included.",
+        _ => "",
+    })
+}
+
 /// A value as the review page shows it.
 pub fn shown_value(key: &str, text: &str) -> String {
     match key {
         "cover_date" => shown_cover_date(text),
         _ => text.to_owned(),
     }
+}
+
+/// Whether a field is shown when blank. The app looks up comic books so
+/// far, so the fields only magazines and collected editions have are
+/// left out; one the lookup filled in is still shown.
+fn offered(key: &str) -> bool {
+    !matches!(
+        key,
+        "category" | "magazine_format" | "black_and_white" | "isbn" | "binding" | "collects"
+    )
 }
 
 fn confidence_label(c: Confidence) -> String {
@@ -323,7 +370,11 @@ fn book_content(index: usize, book: &ReviewBook, emit: &Emit) -> gtk::Box {
                 "Ticked values go into the export; unticked ones are left out.",
             )));
             for field in FIELDS {
-                if let Some(value) = draft.value(field.key).filter(|v| !v.text.is_empty()) {
+                // Every book is a comic unless the lookup says otherwise.
+                let filled = draft
+                    .value(field.key)
+                    .filter(|v| !v.text.is_empty() && !(v.key == "category" && v.text == "comic"));
+                if let Some(value) = filled {
                     details.add(&value_row(
                         index,
                         value,
@@ -354,7 +405,7 @@ fn book_content(index: usize, book: &ReviewBook, emit: &Emit) -> gtk::Box {
                 .title(gettext("Blank fields"))
                 .subtitle(gettext("Left blank by the lookup; you can fill them in"))
                 .build();
-            for field in FIELDS.iter().filter(|f| f.from_text) {
+            for field in FIELDS.iter().filter(|f| f.from_text && offered(f.key)) {
                 let value = draft.value(field.key);
                 if value.is_some_and(|v| !v.text.is_empty()) {
                     continue;

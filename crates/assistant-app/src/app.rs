@@ -271,7 +271,7 @@ impl App {
                 "Edit {field}",
                 &[("field", &gettext(field.label))],
             ))
-            .body(gettext(field.hint))
+            .body(crate::review::field_help(key))
             .extra_child(&list)
             .close_response("cancel")
             .default_response("save")
