@@ -71,6 +71,27 @@ cargo deny fetch && cargo deny check
 cargo vet --locked
 ```
 
+### Translations
+
+Text shown in the app is marked in the Rust code with the functions in
+`crates/assistant-app/src/i18n.rs`, and the review page's field names
+in `crates/assistant-core/src/lookup/fields.rs`. The template for
+translators, `po/mylongboxdb-assistant.pot`, is made from the files
+listed in `po/POTFILES`:
+
+```sh
+sdk "grep '\.rs\$' po/POTFILES | xgettext --files-from=- --language=Rust \
+    --from-code=UTF-8 --add-comments=Translators --keyword=gettext \
+    --keyword=gettext_f --keyword=field:2 --keyword=edition:2 --keyword=judgment:2 \
+    --package-name=mylongboxdb-assistant \
+    --msgid-bugs-address=https://github.com/gdfekaris/MyLongboxDB-Assistant/issues \
+    --sort-by-file -o po/mylongboxdb-assistant.pot"
+```
+
+A translation is a `po/<language>.po` file made from the template, with
+its language code added to `po/LINGUAS`; the Flatpak build checks and
+compiles each one.
+
 ## What is sent where
 
 The app connects to one host, over HTTPS: `api.anthropic.com`. Its network

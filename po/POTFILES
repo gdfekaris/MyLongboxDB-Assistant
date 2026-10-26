@@ -1,0 +1,12 @@
+# Files with text to translate, from the repository root.
+crates/assistant-app/src/add.rs
+crates/assistant-app/src/app.rs
+crates/assistant-app/src/main.rs
+crates/assistant-app/src/photo_editor.rs
+crates/assistant-app/src/photos.rs
+crates/assistant-app/src/review.rs
+crates/assistant-app/src/run.rs
+crates/assistant-app/src/session.rs
+crates/assistant-app/src/setup.rs
+crates/assistant-app/src/unlock.rs
+crates/assistant-core/src/lookup/fields.rs

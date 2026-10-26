@@ -1,0 +1,966 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the mylongboxdb-assistant package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: mylongboxdb-assistant\n"
+"Report-Msgid-Bugs-To: https://github.com/gdfekaris/MyLongboxDB-Assistant/"
+"issues\n"
+"POT-Creation-Date: 2026-10-25 16:53-0700\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: crates/assistant-app/src/add.rs:35
+#, rust-format
+msgid "Photos {front} and {back}"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:38
+#, rust-format
+msgid "Photo {front}"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:74
+msgid ""
+"Type one book a line, such as Amazing Spider-Man (1963) 300, ASM #300, X-Men "
+"1991 #1, or a range such as Thor (1966) 337-340."
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:102
+msgid ""
+"Add photos of your books' front covers, one book a photo. If you took a "
+"book's back cover too, add it to that book."
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:109
+msgid "_Add Photos…"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:126
+msgid "Typed"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:132 crates/assistant-app/src/add.rs:241
+msgid "Photos"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:146
+msgid "Books per run"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:147
+msgid "The most books one run may hold"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:153
+msgid "_Look Up…"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:258
+msgid "Add Photos"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:259
+msgid "Add Back Cover"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:296
+msgid "photo"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:304 crates/assistant-app/src/add.rs:367
+#: crates/assistant-app/src/add.rs:399 crates/assistant-app/src/photos.rs:100
+msgid "the photo could not be read"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:305
+msgid "the photo could not be opened"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:355 crates/assistant-app/src/add.rs:486
+msgid "Edit Back Cover"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:357 crates/assistant-app/src/add.rs:488
+msgid "Edit Front Cover"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:464
+#, rust-format
+msgid "Back cover: {name}"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:465
+msgid "Front cover only"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:529
+msgid "Swap Front and Back"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:540
+msgid "Remove Back Cover"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:554
+msgid "Use as Back of the Book Above"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:564
+msgid "Add Back Cover…"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:568
+msgid "Remove Book"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:588
+#, rust-format
+msgid "Line {line}: {text}"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:612
+msgid "Fix or remove the lines that could not be read."
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:618
+#, rust-format
+msgid "Reading photos: {count} to go…"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:626
+#, rust-format
+msgid ""
+"{count} books is more than a run may hold ({batch}). Split them up, or raise "
+"Books per run."
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:635
+msgid "1 book to look up"
+msgstr ""
+
+#: crates/assistant-app/src/add.rs:638
+#, rust-format
+msgid "{count} books to look up"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:93 crates/assistant-app/src/app.rs:854
+#: crates/assistant-app/src/app.rs:864
+msgid "Main Menu"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:238
+#, rust-format
+msgid "The looked-up books could not be saved: {why}"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:267
+#, rust-format
+msgid "Edit {field}"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:276 crates/assistant-app/src/app.rs:299
+#: crates/assistant-app/src/app.rs:522 crates/assistant-app/src/app.rs:675
+#: crates/assistant-app/src/app.rs:724
+#: crates/assistant-app/src/photo_editor.rs:565
+#: crates/assistant-app/src/run.rs:230
+msgid "_Cancel"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:276
+#: crates/assistant-app/src/photo_editor.rs:567
+msgid "_Save"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:292
+msgid "Discard This Book?"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:294
+msgid ""
+"Its looked-up details are deleted. Looking it up again costs as much again."
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:300
+msgid "_Discard"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:395
+msgid "_Close"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:420
+msgid "Some Books Would Not Import"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:422
+#, rust-format
+msgid ""
+"Correct these books, or leave them out of the export:\n"
+"\n"
+"{books}"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:437
+msgid "Export"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:462
+msgid "the export could not be made"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:492
+#, rust-format
+msgid ""
+"With {model}, this should cost about {likely}, and at most {most}, web "
+"searches included."
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:501
+#, rust-format
+msgid "The cost with {model} is not known in advance."
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:507
+#, rust-format
+msgid "{cost} Type your passphrase to start."
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:513
+msgid "Look Up 1 Book?"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:515
+#, rust-format
+msgid "Look Up {count} Books?"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:523
+msgid "_Look Up"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:527 crates/assistant-app/src/setup.rs:414
+#: crates/assistant-app/src/unlock.rs:40
+msgid "Passphrase"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:577
+msgid "There is no key for this provider; set the app up again."
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:653
+msgid "New passphrase"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:657
+msgid "New passphrase again"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:667
+msgid "Change Passphrase"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:668
+msgid "At least 12 characters, typed twice."
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:676
+msgid "C_hange"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:716
+msgid "Remove the Saved Key?"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:718
+msgid ""
+"The encrypted key file is deleted, and you set the app up again with a key. "
+"The key itself stays valid at your provider until you revoke it there."
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:725
+msgid "_Remove"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:761
+msgid "The passphrase is wrong, or the key file is damaged."
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:763
+msgid "The key file was saved by a newer version of the app."
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:765
+msgid "The system could not supply random numbers."
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:769
+#, rust-format
+msgid "The key file could not be read or saved: {why}"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:791
+msgid "the limit on network ports"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:794
+msgid "the limits on changing files and on network ports"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:798
+msgid "the filter on kinds of network connection"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:810
+#, rust-format
+msgid ""
+"This system does not support some of the app's own protections: {missing}. "
+"The Flatpak sandbox still applies."
+msgstr ""
+
+#. Translators: joins two protections in the list above.
+#: crates/assistant-app/src/app.rs:812
+msgid " and "
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:827
+msgid "MyLongboxDB Assistant"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:842
+msgid "_Lock"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:844
+msgid "Change _Passphrase…"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:847
+msgid "_Set Up Again…"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:848
+msgid "_Remove Saved Key…"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:875
+msgid "_Review"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:890
+msgid "_Dismiss"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:1031
+#, rust-format
+msgid "The saved looked-up books could not be read and were set aside: {why}"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:1076
+#, rust-format
+msgid "Your choices could not be saved: {why}"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:1087
+#, rust-format
+msgid "The key could not be saved: {why}"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:1127
+msgid "Locked after a quarter of an hour unused."
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:1135
+msgid "Unlock first, then change the passphrase."
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:1151
+msgid "The passphrase is changed."
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:1311
+msgid "Could Not Export"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:1313
+#, rust-format
+msgid "Nothing was exported, and the books are still here: {why}"
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:1329
+msgid "1 book was exported."
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:1332
+#, rust-format
+msgid "{count} books were exported."
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:1337
+#, rust-format
+msgid ""
+"{exported} In MyLongboxDB, choose Import Books and pick the file; it shows "
+"what will be added before anything is."
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:1344
+#, rust-format
+msgid "{unticked} values you did not tick were left out."
+msgstr ""
+
+#: crates/assistant-app/src/app.rs:1348
+msgid "Export Saved"
+msgstr ""
+
+#. Translators: the frame drawn over a photo to choose what part of it
+#. to keep.
+#: crates/assistant-app/src/photo_editor.rs:328
+msgid "Crop"
+msgstr ""
+
+#: crates/assistant-app/src/photo_editor.rs:332
+msgid ""
+"Arrow keys move the selected edge, or the whole crop; Shift moves it "
+"further. Tab selects the next edge."
+msgstr ""
+
+#. Translators: rotating the photo a few degrees so the cover is level.
+#: crates/assistant-app/src/photo_editor.rs:361
+msgid "Straighten"
+msgstr ""
+
+#: crates/assistant-app/src/photo_editor.rs:517
+msgid "Turn Left"
+msgstr ""
+
+#: crates/assistant-app/src/photo_editor.rs:522
+msgid "Turn Right"
+msgstr ""
+
+#: crates/assistant-app/src/photo_editor.rs:524
+msgid "Undo All Changes"
+msgstr ""
+
+#: crates/assistant-app/src/photo_editor.rs:524
+msgid "_Reset"
+msgstr ""
+
+#: crates/assistant-app/src/photos.rs:75
+msgid "the photo could not be saved"
+msgstr ""
+
+#. Translators: {reason} says why the photo thread could not lock itself
+#. down, in English.
+#: crates/assistant-app/src/photos.rs:99
+#, rust-format
+msgid "the photo could not be read safely: {reason}"
+msgstr ""
+
+#: crates/assistant-app/src/photos.rs:144
+#, rust-format
+msgid "{name} was not changed: {why}"
+msgstr ""
+
+#: crates/assistant-app/src/photos.rs:152
+#, rust-format
+msgid "{name} was not added: {why}"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:87
+#, rust-format
+msgid "From your cover photo ({confidence})"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:96
+#, rust-format
+msgid "From {site} ({confidence})"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:106
+msgid "Your own value"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:139
+#: crates/assistant-app/src/review.rs:253
+#: crates/assistant-app/src/review.rs:552
+msgid "Include in the export"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:142
+msgid "To look at"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:188
+msgid "Edit"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:209
+msgid "First appearance"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:212
+#, rust-format
+msgid "Part {part}"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:234
+msgid "Ready"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:235
+#, rust-format
+msgid "{n} to look at"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:237
+msgid "Which series? Pick one"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:238 crates/assistant-app/src/run.rs:202
+msgid "No matching issue found"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:239 crates/assistant-app/src/run.rs:203
+msgid "No reliable sources found"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:261
+msgid "Discard This Book"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:273
+msgid "Front cover"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:274
+msgid "Back cover"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:290
+msgid "Your Photos"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:312
+msgid "Details"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:314
+msgid "Ticked values go into the export; unticked ones are left out."
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:329
+msgid "Credits"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:330
+msgid "Characters"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:331
+msgid "Teams"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:332
+msgid "Story arcs"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:345
+msgid "Blank fields"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:346
+msgid "Left blank by the lookup; you can fill them in"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:362
+msgid "Which Series Did You Mean?"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:364
+msgid "Picking one looks the book up again as that series, at the usual cost."
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:381
+msgid "Look Up This One"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:394
+msgid "Check the line's series and number, or look it up again later."
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:403
+msgid "Sources"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:404
+msgid "The pages the lookup cited, shown as text"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:418
+msgid "Research notes"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:484
+msgid "_Export…"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:489
+msgid "_Add Books"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:502
+msgid "Review"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:566
+#, rust-format
+msgid "1 looked-up book, {included} included in the export."
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:571
+#, rust-format
+msgid "{count} looked-up books, {included} included in the export."
+msgstr ""
+
+#: crates/assistant-app/src/run.rs:169
+msgid "Waiting"
+msgstr ""
+
+#: crates/assistant-app/src/run.rs:170
+msgid "Looking up…"
+msgstr ""
+
+#: crates/assistant-app/src/run.rs:171
+msgid "Not looked up"
+msgstr ""
+
+#: crates/assistant-app/src/run.rs:191
+#, rust-format
+msgid "Found: {filled} details, {review} to look at"
+msgstr ""
+
+#: crates/assistant-app/src/run.rs:199
+#, rust-format
+msgid "Which series? {count} could be meant"
+msgstr ""
+
+#: crates/assistant-app/src/run.rs:236
+msgid "_Look Up More Books"
+msgstr ""
+
+#: crates/assistant-app/src/run.rs:243
+msgid "_Try Unfinished Books Again"
+msgstr ""
+
+#: crates/assistant-app/src/run.rs:250
+msgid "_Review Results"
+msgstr ""
+
+#: crates/assistant-app/src/run.rs:318
+#, rust-format
+msgid "{cost}, and some of it unknown"
+msgstr ""
+
+#: crates/assistant-app/src/run.rs:323
+#, rust-format
+msgid ""
+"Done: {found} looked up, {failed} failed, {skipped} not looked up. Spent "
+"{cost}."
+msgstr ""
+
+#: crates/assistant-app/src/run.rs:335
+#, rust-format
+msgid ""
+"Stopping: lookups already under way finish first, and are paid for. {done} "
+"of {total} books done. Spent {cost} so far."
+msgstr ""
+
+#: crates/assistant-app/src/run.rs:344
+#, rust-format
+msgid "{done} of {total} books done. Spent {cost} so far."
+msgstr ""
+
+#: crates/assistant-app/src/session.rs:21
+#, rust-format
+msgid "Use at least {min} characters; this has {length}."
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:127
+msgid ""
+"MyLongboxDB Assistant sends the books you add to the AI provider: each cover "
+"photo, re-encoded so it carries no location or camera details, and the lines "
+"you type, with the app's own instructions. Your MyLongboxDB collection, your "
+"file names, and anything about your computer are never sent."
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:135
+msgid ""
+"If you choose OpenRouter, it passes them on to the company running the model."
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:145
+msgid "Anthropic"
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:146
+msgid "Claude models, through Anthropic's own API"
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:149
+msgid "OpenRouter"
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:150
+msgid "Many companies' models, through one API"
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:158
+msgid ""
+"Use a key made just for this app, in a workspace with a monthly spend limit "
+"set in the Claude Console, and revoke it at the first doubt. The key is "
+"checked by listing the models it can use."
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:163
+msgid ""
+"Use a key made just for this app, with a credit limit set on the key in "
+"OpenRouter's settings, and revoke it at the first doubt. The key is checked "
+"by listing the models it can use."
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:183
+msgid "Provider"
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:208 crates/assistant-app/src/setup.rs:373
+msgid "_Next"
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:211
+msgid "Set Up"
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:247
+msgid "API key"
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:260
+msgid "_Check Key"
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:268
+msgid "That does not look like an API key."
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:301
+msgid ""
+"The key works, but none of its models can read photos, keep to a schema, and "
+"search the web, which the app needs."
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:310
+msgid ""
+"The provider did not accept this key. Check that it was copied whole and has "
+"not been revoked."
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:317
+#, rust-format
+msgid "The key could not be checked: {why}"
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:323
+msgid "The key could not be checked."
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:329
+msgid "API Key"
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:342
+msgid ""
+"Each book takes three requests: one that searches the web, one that turns "
+"what it found into fields, and one that checks them. The estimates are first "
+"guesses."
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:349
+#, rust-format
+msgid "{model} — about {cost} a book"
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:352
+#, rust-format
+msgid "{model} — cost unknown"
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:357 crates/assistant-app/src/setup.rs:389
+msgid "Model"
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:401
+msgid ""
+"Saved keys are encrypted with a passphrase, which you type when the app "
+"starts, again before each run, and after a quarter of an hour unused. "
+"Without saving, the key is kept only until the app closes or locks."
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:410
+msgid "Save the key"
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:417
+msgid "Passphrase again"
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:436
+msgid "_Finish"
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:448
+msgid "The two passphrases differ."
+msgstr ""
+
+#: crates/assistant-app/src/setup.rs:465
+msgid "Save"
+msgstr ""
+
+#: crates/assistant-app/src/unlock.rs:53
+msgid "_Unlock"
+msgstr ""
+
+#: crates/assistant-app/src/unlock.rs:59
+msgid "Forgot the passphrase?"
+msgstr ""
+
+#: crates/assistant-app/src/unlock.rs:74
+msgid "Locked"
+msgstr ""
+
+#: crates/assistant-app/src/unlock.rs:75
+msgid "Type your passphrase to use your saved API key."
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:85
+msgid "Series"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:91
+msgid "Start year"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:99
+msgid "Issue number"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:105
+msgid "Volume"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:111
+msgid "Publisher"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:117
+msgid "Imprint"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:123
+msgid "Kind"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:129
+msgid "Magazine format"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:135
+msgid "Black and white"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:141
+msgid "Issues in the series"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:147
+msgid "Legacy number"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:153
+msgid "Story title"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:159
+msgid "Cover date"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:165
+msgid "Release date"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:171
+msgid "Pages"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:177
+msgid "Synopsis"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:183
+msgid "Key issue"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:189
+msgid "Why it is a key"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:195
+msgid "Cover price (US)"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:201
+msgid "Cover price (Canada)"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:207
+msgid "ISBN"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:213
+msgid "Binding"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:219
+msgid "Collects"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:225
+msgid "Variant"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:231
+msgid "Variant cover artists"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:237
+msgid "Printing"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:243
+msgid "Distribution"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:249
+msgid "Published"
+msgstr ""
+
+#: crates/assistant-core/src/lookup/fields.rs:255
+msgid "Barcode"
+msgstr ""
