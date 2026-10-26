@@ -12,15 +12,15 @@
 
   <description>
     <p>
-      MyLongboxDB Assistant looks up the details of comic books, magazines,
-      and collected editions from a cover photo or a series and issue
-      number, using a Claude model from Anthropic with your own API key. You review every field it found before anything is saved,
-      and the results are written as a MyLongboxDB full export for you to
-      import.
+      MyLongboxDB Assistant looks up the details of comic books from a
+      cover photo or a series and issue number, using a Claude model from
+      Anthropic with your own API key. You review every field it found
+      before anything is saved, and the results are written as a
+      MyLongboxDB full export for you to import.
     </p>
     <p>
       The Assistant never opens your MyLongboxDB collection, connects only
-      to the provider you choose, and keeps your API key encrypted with a
+      to Anthropic's API, and keeps your API key encrypted with a
       passphrase, or does not store it at all.
     </p>
   </description>
