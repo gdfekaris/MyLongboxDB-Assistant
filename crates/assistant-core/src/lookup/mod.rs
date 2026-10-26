@@ -803,6 +803,9 @@ pub fn look_up_covers(
     undated_cover(&mut draft, &reading);
     facsimile(&mut draft, &reading);
     variant_name(&mut draft);
+    if covers.chosen.is_some() && draft.identity == Identity::Identified {
+        given_volume(&mut draft);
+    }
     Ok(draft)
 }
 
@@ -1286,11 +1289,37 @@ fn look_up_from(
     annual_series(&mut draft);
     if from_text {
         sale_month(&mut draft);
+        given_volume(&mut draft);
     }
     year_only_date(&mut draft);
     titled_year(&mut draft);
     judgments(&mut draft);
     Ok(draft)
+}
+
+/// A volume the owner gave, typed as in Batman Vol. 2 #1 or with the
+/// series they picked from the candidates, is theirs. Where the lookup
+/// found none, it becomes the book's volume, shown and ticked as their
+/// own value, so unticking it leaves it out; where the lookup found
+/// another, that waits for the owner. A volume read from a cover is not
+/// one the owner gave.
+fn given_volume(draft: &mut Draft) {
+    let Some(typed) = draft.query.volume else {
+        return;
+    };
+    let Some(value) = draft.values.iter_mut().find(|v| v.key == "volume") else {
+        return;
+    };
+    if value.text.is_empty() {
+        value.text = typed.to_string();
+        value.source = None;
+        value.confidence = Confidence::High;
+        value.accepted = true;
+        value.note = "the volume you gave".into();
+    } else if value.text != typed.to_string() {
+        value.accepted = false;
+        value.note = format!("you gave Vol. {typed}");
+    }
 }
 
 /// The collection dates books by month. A cover date of only a year is

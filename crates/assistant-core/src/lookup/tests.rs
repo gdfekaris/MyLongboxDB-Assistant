@@ -739,6 +739,56 @@ fn photo_books_follow_the_owner_s_conventions() {
 }
 
 #[test]
+fn a_volume_goes_into_the_export_only_when_ticked() {
+    // A cover that prints a volume the lookup leaves blank.
+    let mut cover = robot_cover();
+    cover["items"]["volume"] = json!({"text": "Vol. 1", "where": "front, top"});
+    let provider = Scripted::new(vec![
+        answered(cover),
+        researched(2),
+        answered(photo_structured(&[(
+            "series",
+            value("Astonishing Robot Tales", 1, "high"),
+        )])),
+        no_problems(),
+    ]);
+    let mut draft = run_covers(&provider, false).0.unwrap();
+    assert_eq!(draft.query.volume, Some(1));
+    assert_eq!(draft.book(YEAR).unwrap().series.volume, None);
+    // One the lookup found counts once ticked, and not when unticked.
+    draft.set_value("volume", "1", YEAR).unwrap();
+    assert_eq!(draft.book(YEAR).unwrap().series.volume, Some(1));
+    for v in draft.values.iter_mut().filter(|v| v.key == "volume") {
+        v.accepted = false;
+    }
+    assert_eq!(draft.book(YEAR).unwrap().series.volume, None);
+}
+
+#[test]
+fn a_typed_volume_is_the_owner_s_own_ticked_value() {
+    let provider = Scripted::new(vec![researched(2), answered(full_answer()), no_problems()]);
+    let mut draft = run(&provider, "ART (1954) Vol. 2 #1").0.unwrap();
+    let volume = draft.value("volume").unwrap().clone();
+    assert_eq!(volume.text, "2");
+    assert!(volume.accepted);
+    assert_eq!(volume.source, None);
+    assert_eq!(draft.book(YEAR).unwrap().series.volume, Some(2));
+    for v in draft.values.iter_mut().filter(|v| v.key == "volume") {
+        v.accepted = false;
+    }
+    assert_eq!(draft.book(YEAR).unwrap().series.volume, None);
+    // A different volume found by the lookup waits for the owner.
+    let mut answer = full_answer();
+    answer["fields"]["volume"] = value("3", 1, "high");
+    let provider = Scripted::new(vec![researched(2), answered(answer), no_problems()]);
+    let draft = run(&provider, "ART (1954) Vol. 2 #1").0.unwrap();
+    let volume = draft.value("volume").unwrap();
+    assert_eq!(volume.text, "3");
+    assert!(!volume.accepted);
+    assert_eq!(volume.note, "you gave Vol. 2");
+}
+
+#[test]
 fn a_series_the_owner_chose_is_looked_up_with_the_covers() {
     let provider = Scripted::new(vec![
         answered(robot_cover()),
@@ -747,7 +797,7 @@ fn a_series_the_owner_chose_is_looked_up_with_the_covers() {
         no_problems(),
     ]);
     let mut covers = covers(false);
-    covers.chosen = Some(query("Robot Tales (1960) #1"));
+    covers.chosen = Some(query("Robot Tales (1960) Vol. 2 #1"));
     let draft = look_up_covers(
         &provider,
         &covers,
@@ -758,6 +808,8 @@ fn a_series_the_owner_chose_is_looked_up_with_the_covers() {
     .unwrap();
     assert_eq!(draft.query.series, "Robot Tales");
     assert_eq!(draft.query.start_year, Some(1960));
+    // The volume of the series the owner picked is theirs, and ticked.
+    assert_eq!(draft.book(YEAR).unwrap().series.volume, Some(2));
     // The cover is still read, and its items are still sources.
     assert_eq!(provider.answers_asked.borrow()[0].name, "cover");
     assert!(draft.sources.iter().any(|s| s.url == COVER_PHOTO));

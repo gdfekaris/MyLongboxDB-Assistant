@@ -180,7 +180,11 @@ impl Draft {
         book.series.start_year = get("start_year")
             .and_then(|y| y.parse().ok())
             .or(self.query.start_year);
-        book.series.volume = number("volume").or(self.query.volume);
+        // Only a ticked volume: one printed on a cover or typed in a line
+        // is a value of its own, so leaving it unticked leaves it out, and
+        // a series is not split from its other issues by a volume the
+        // owner did not choose.
+        book.series.volume = number("volume");
         book.series.publisher = get("publisher").unwrap_or_default();
         book.series.imprint = get("imprint").unwrap_or_default();
         book.series.known_issue_count = number("known_issue_count");
