@@ -17,7 +17,10 @@ image = { version = "0.25.10", default-features = false, features = ["jpeg", "pn
 moxcms = "0.8.1"
 # Reading HEIC needs libheif, which a plain host may lack, so it sits
 # behind a feature. The Flatpak builds libheif with its HEVC decoder.
-libheif-rs = { version = "3.0.0", default-features = false, features = ["v1_20"], optional = true }
+# The bindings must be those of the libheif built, 1.23: libheif reads a
+# security-limits struct as long as its own version says, so an older,
+# shorter one would be read past its end.
+libheif-rs = { version = "3.0.0", default-features = false, features = ["v1_23"], optional = true }
 
 [dev-dependencies]
 # The app decodes photos on confined threads; tests show every decoder

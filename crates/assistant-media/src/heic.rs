@@ -192,6 +192,37 @@ mod tests {
         ));
     }
 
+    /// The bindings are built for libheif 1.23; a different libheif, such
+    /// as the Flatpak manifest updating it, must come with new bindings.
+    #[test]
+    fn the_bindings_are_those_of_the_libheif_linked() {
+        let version = LibHeif::new().version();
+        assert_eq!(version[..2], [1, 23], "libheif {version:?}");
+    }
+
+    /// Limits made while other threads start and stop libheif are the
+    /// same each time, with the newest limits libheif has.
+    #[test]
+    fn the_limits_are_whole_and_steady() {
+        let first = limits();
+        assert_eq!(first.max_number_of_file_brands(), 1000);
+        let threads: Vec<_> = (0..8)
+            .map(|_| {
+                std::thread::spawn(|| {
+                    (0..200)
+                        .map(|_| {
+                            let _lib = LibHeif::new();
+                            limits().max_number_of_file_brands()
+                        })
+                        .collect::<Vec<_>>()
+                })
+            })
+            .collect();
+        for thread in threads {
+            assert!(thread.join().unwrap().iter().all(|n| *n == 1000));
+        }
+    }
+
     #[test]
     fn libheif_limits_allow_the_largest_accepted_photo() {
         let caps = limits();
