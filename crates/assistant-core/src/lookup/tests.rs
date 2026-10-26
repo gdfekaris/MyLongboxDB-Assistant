@@ -1295,3 +1295,20 @@ fn a_typed_modern_book_is_dated_by_its_sale_month_for_the_owner_to_check() {
     let date = draft.value("cover_date").unwrap();
     assert_eq!((date.text.as_str(), date.accepted), ("1965-12", true));
 }
+
+#[test]
+fn an_editor_waits_for_the_owner() {
+    let mut answer = structured(&[("series", value("Astonishing Robot Tales", 1, "high"))]);
+    answer["credits"] = json!([
+        {"name": "Ada Sprocket", "role": "writer", "source": 1, "confidence": "high"},
+        {"name": "Rex Rivet", "role": "editor", "source": 1, "confidence": "high"}
+    ]);
+    let provider = Scripted::new(vec![researched(2), answered(answer), no_problems()]);
+    let draft = run(&provider, "ART #1").0.unwrap();
+    let held: Vec<(&str, bool)> = draft
+        .credits
+        .iter()
+        .map(|c| (c.name.as_str(), c.accepted))
+        .collect();
+    assert_eq!(held, [("Ada Sprocket", true), ("Rex Rivet", false)]);
+}

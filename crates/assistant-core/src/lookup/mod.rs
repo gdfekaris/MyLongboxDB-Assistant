@@ -1209,10 +1209,10 @@ fn year_only_date(draft: &mut Draft) {
 
 /// What the collection records by judgment waits for the owner: a role
 /// the sources credit to several people, where the collection keeps the
-/// main one, and the characters, of whom it keeps the notable ones. A
-/// book numbered as a preview or promotion, such as 1/2 or 0, waits for
-/// the owner's word on its series and start year too, which the sources
-/// often place differently.
+/// main one, the editor, and the characters, of whom it keeps the
+/// notable ones. A book numbered as a preview or promotion, such as 1/2
+/// or 0, waits for the owner's word on its series and start year too,
+/// which the sources often place differently.
 fn judgments(draft: &mut Draft) {
     let roles: Vec<Role> = draft
         .credits
@@ -1230,6 +1230,13 @@ fn judgments(draft: &mut Draft) {
             credit.accepted = false;
             if credit.note.is_empty() {
                 credit.note = "one of several in this role: keep the main credit".into();
+            }
+        } else if role == Role::Editor {
+            // Sources name editors loosely: an issue's own, its group's,
+            // or an assistant, and collections keep them differently.
+            credit.accepted = false;
+            if credit.note.is_empty() {
+                credit.note = "check the editor your collection records".into();
             }
         }
     }
