@@ -303,8 +303,27 @@ impl RunPage {
                 .title_lines(1)
                 .build();
             row.set_use_markup(false);
-            if matches!(status, Status::LookingUp) {
-                row.add_suffix(&adw::Spinner::new());
+            let mark = |icon: &str, class: &str, tip: String| {
+                gtk::Image::builder()
+                    .icon_name(icon)
+                    .css_classes([class])
+                    .tooltip_text(tip)
+                    .build()
+            };
+            match status {
+                Status::LookingUp => row.add_suffix(&adw::Spinner::new()),
+                Status::Done(draft) if draft.identity == Identity::Identified => row.add_suffix(
+                    &mark("object-select-symbolic", "success", gettext("Looked up")),
+                ),
+                Status::Done(_) => row.add_suffix(&mark(
+                    "dialog-warning-symbolic",
+                    "warning",
+                    gettext("Needs your choice"),
+                )),
+                Status::Failed(_) => {
+                    row.add_suffix(&mark("dialog-error-symbolic", "error", gettext("Failed")))
+                }
+                Status::Waiting | Status::Skipped => {}
             }
             self.list.append(&row);
         }
