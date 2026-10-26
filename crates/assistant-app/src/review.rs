@@ -9,7 +9,8 @@ use std::rc::Rc;
 
 use adw::prelude::*;
 use assistant_core::lookup::{
-    COVER_PHOTO, Detail, Draft, Entry, FIELDS, Identity, KNOWLEDGE, Kind, Source, Value, spec,
+    CATALOG_COPY, COVER_PHOTO, Detail, Draft, Entry, FIELDS, Identity, KNOWLEDGE, Kind, Source,
+    Value, spec,
 };
 use assistant_core::model::{Category, Confidence, Grade, GradeType, Role};
 use assistant_core::results::ReviewBook;
@@ -257,6 +258,10 @@ fn provenance(source: Option<usize>, sources: &[Source], note: &str) -> String {
         }
         Some(s) if s.url == KNOWLEDGE => {
             lines.push(gettext("From Claude's knowledge, not a page"));
+        }
+        // The record runs to many lines; the sources list shows it whole.
+        Some(s) if s.url == CATALOG_COPY => {
+            lines.push(gettext("From your copy of the Grand Comics Database"));
         }
         Some(s) => {
             lines.push(gettext_f("From {site}", &[("site", site(&s.url))]));
@@ -603,6 +608,19 @@ fn book_content(index: usize, book: &ReviewBook, emit: &Emit) -> gtk::Box {
             .subtitle(gettext("The pages the lookup cited, shown as text"))
             .build();
         for s in draft.sources.iter().filter(|s| s.url != KNOWLEDGE) {
+            if s.url == CATALOG_COPY {
+                let row = plain_row(
+                    &s.title,
+                    &format!(
+                        "{}\n{}",
+                        gettext("Data from the Grand Comics Database, CC BY-SA 4.0"),
+                        s.cited_text
+                    ),
+                );
+                row.set_subtitle_lines(0);
+                expander.add_row(&row);
+                continue;
+            }
             expander.add_row(&plain_row(
                 &s.title,
                 &format!("{}\n{}", s.url, s.cited_text),

@@ -4,6 +4,7 @@
 
 mod add;
 mod app;
+mod catalogue;
 mod config;
 mod format;
 mod i18n;

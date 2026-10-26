@@ -8,6 +8,14 @@ found, then the app writes the books as a MyLongboxDB full export, which
 MyLongboxDB imports like any other. Magazines and collected editions
 have their fields, but the lookup has not yet been tuned for them.
 
+If you add your own copy of the
+[Grand Comics Database](https://www.comics.org)'s data, lookups check
+it before they search the web. Download the SQLite data dump from
+comics.org/download (a free account is needed) and choose it from the
+main menu, Grand Comics Database. The app reads it once, in a minute or
+two, into a 1.2 GB index of its own; the GCD's data is shared under the
+CC BY-SA 4.0 license.
+
 The Assistant never opens your MyLongboxDB collection. MyLongboxDB
 itself stays offline; this separate app holds the network permission
 instead, and only ever sees the photos and text you give it.
@@ -125,6 +133,9 @@ later version, but this version never contacts it.
   and imagecomics.com (the `READ_SITES` constant in
   `crates/assistant-net/src/lookup.rs`). Anthropic's servers do the
   searching and reading; the app itself never fetches a web page.
+- **From your copy of the Grand Comics Database,** if you add one: the
+  record of each issue a lookup finds in it, sent with that lookup.
+  Nothing else in your copy leaves your computer.
 - **Never sent:** your MyLongboxDB collection, file names, or anything
   about your computer beyond what any HTTPS request carries.
 
@@ -238,6 +249,17 @@ authors.
   Verify with `cargo test -p assistant-core`, and with the CI job that
   imports the app's exports using MyLongboxDB's own code at a pinned
   release.
+- **Your copy of the Grand Comics Database is read as untrusted.** The
+  dump you pick is opened read-only, with SQLite's defensive settings,
+  its views and triggers switched off, and its values and statements
+  capped; only the tables the index needs are read, each checked to be
+  a plain table, and every value is cleaned and capped before it is
+  kept. It is read on a thread that can read only that file, change
+  files only in the index's own folder, and make or use no socket and
+  start no program. Verify with `cargo test -p assistant-gcd`, whose
+  tests feed it files that are not the dump, a view in place of a
+  table, and hostile text, and with
+  `cargo test -p assistant-sandbox --test files_only`.
 - **No telemetry, crash reports, or update checks.** The app can reach
   only the two provider hosts above, so there is nowhere else for them
   to go. Verify with `cargo test -p assistant-net`, and with

@@ -16,6 +16,7 @@ workspace = true
 
 [dependencies]
 assistant-core = { path = "../assistant-core", version = "0.1.0" }
+assistant-gcd = { path = "../assistant-gcd", version = "0.1.0" }
 assistant-keys = { path = "../assistant-keys", version = "0.1.0" }
 assistant-net = { path = "../assistant-net", version = "0.1.0" }
 assistant-media = { path = "../assistant-media", version = "0.1.0" }

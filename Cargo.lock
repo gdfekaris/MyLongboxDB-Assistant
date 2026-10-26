@@ -36,6 +36,7 @@ name = "assistant-app"
 version = "0.1.0"
 dependencies = [
  "assistant-core",
+ "assistant-gcd",
  "assistant-keys",
  "assistant-media",
  "assistant-net",

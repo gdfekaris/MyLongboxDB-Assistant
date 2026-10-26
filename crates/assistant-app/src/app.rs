@@ -2,6 +2,7 @@
 //! lookups, and holding the unlocked keys under the session's rules.
 
 use std::rc::Rc;
+use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
@@ -20,6 +21,7 @@ use gtk::{gio, glib};
 use relm4::{ComponentParts, ComponentSender, SimpleComponent};
 
 use crate::add::AddPage;
+use crate::catalogue;
 use crate::config::{self, Config, ProviderChoice};
 use crate::i18n::{gettext, gettext_f};
 use crate::review::{List, ReviewMsg, ReviewPage};
@@ -72,6 +74,13 @@ pub enum AppMsg {
     /// An export was written, or not: the books in it, and how many of
     /// their values were left out because they were not ticked.
     Exported(Result<(), String>, Vec<Draft>, usize),
+    /// The owner's copy of the Grand Comics Database: its dialog, the
+    /// dump picked to add, the import's progress and end, and removing it.
+    Catalogue,
+    CatalogueFile(gio::File),
+    CatalogueProgress(assistant_gcd::Step, u64),
+    CatalogueAdded(Result<assistant_gcd::Imported, assistant_gcd::ImportError>),
+    RemoveCatalogue,
 }
 
 /// Which work page is showing when the app is unlocked.
@@ -128,6 +137,11 @@ impl std::fmt::Debug for AppMsg {
             Self::TryAgain => "TryAgain",
             Self::Export => "Export",
             Self::Exported(..) => "Exported",
+            Self::Catalogue => "Catalogue",
+            Self::CatalogueFile(_) => "CatalogueFile",
+            Self::CatalogueProgress(..) => "CatalogueProgress",
+            Self::CatalogueAdded(_) => "CatalogueAdded",
+            Self::RemoveCatalogue => "RemoveCatalogue",
         })
     }
 }
@@ -152,6 +166,11 @@ pub struct App {
     replacing: Option<usize>,
     /// The books waiting for the owner to confirm their run.
     pending: Vec<Book>,
+    /// The owner's copy of the Grand Comics Database, if they added one,
+    /// which lookups ask before the web.
+    catalog: Option<Arc<assistant_gcd::Catalog>>,
+    /// An import of a GCD dump under way, with its progress dialog.
+    importing: Option<catalogue::Progress>,
     toasts: adw::ToastOverlay,
     sender: ComponentSender<Self>,
 }
@@ -465,6 +484,94 @@ impl App {
         }
     }
 
+    /// The dialog for the owner's copy of the Grand Comics Database: what
+    /// it is and how to get it, or what the copy holds, with the choice to
+    /// add, replace, or remove it.
+    fn show_catalogue(&self) {
+        if self.importing.is_some() {
+            return;
+        }
+        let about = self.catalog.as_ref().map(|c| c.about());
+        let how = gettext(
+            "Download the SQLite data dump from comics.org/download (a free account is needed), \
+             then choose the zip or the .db file here. Reading it takes a minute or two and needs \
+             about 9 GB free while it runs; the app keeps a 1.2 GB index of it. For each book \
+             looked up, the record of that issue is sent with the lookup; nothing else in your \
+             copy leaves your computer. The data is the Grand Comics Database's, shared under \
+             the CC BY-SA 4.0 license.",
+        );
+        let body = match &about {
+            Some(about) => format!("{}\n\n{how}", catalogue::described(about)),
+            None => format!(
+                "{}\n\n{how}",
+                gettext(
+                    "Lookups can check your own copy of the Grand Comics Database before they \
+                     search the web, for each issue's editions, dates, prices, credits, and \
+                     characters.",
+                )
+            ),
+        };
+        let dialog = adw::AlertDialog::builder()
+            .heading(gettext("Grand Comics Database"))
+            .body(body)
+            .close_response("close")
+            .default_response("choose")
+            .build();
+        dialog.add_response("close", &gettext("_Close"));
+        if about.is_some() {
+            dialog.add_response("remove", &gettext("_Remove…"));
+            dialog.set_response_appearance("remove", adw::ResponseAppearance::Destructive);
+            dialog.add_response("choose", &gettext("Choose a _Newer File…"));
+        } else {
+            dialog.add_response("choose", &gettext("_Choose File…"));
+            dialog.set_response_appearance("choose", adw::ResponseAppearance::Suggested);
+        }
+        let (sender, window) = (self.sender.clone(), self.window.clone());
+        dialog.choose(
+            Some(&self.window),
+            None::<&gio::Cancellable>,
+            move |response| match response.as_str() {
+                "choose" => catalogue::pick(&window, move |file| {
+                    sender.input(AppMsg::CatalogueFile(file));
+                }),
+                "remove" => confirm_remove_catalogue(&window, sender),
+                _ => {}
+            },
+        );
+    }
+
+    /// Starts reading the dump the owner picked, showing its progress.
+    fn add_catalogue(&mut self, file: &gio::File) {
+        if self.importing.is_some() {
+            return;
+        }
+        let Some(path) = file.path() else {
+            self.toast(&gettext("The file could not be opened."));
+            return;
+        };
+        let cancel = Arc::new(AtomicBool::new(false));
+        self.importing = Some(catalogue::Progress::new(&self.window, cancel.clone()));
+        let (progress, done) = (
+            self.sender.input_sender().clone(),
+            self.sender.input_sender().clone(),
+        );
+        let started = catalogue::import(
+            path,
+            cancel,
+            move |step, count| progress.emit(AppMsg::CatalogueProgress(step, count)),
+            move |result| done.emit(AppMsg::CatalogueAdded(result)),
+        );
+        if let Err(e) = started {
+            if let Some(progress) = self.importing.take() {
+                progress.close();
+            }
+            self.toast(&gettext_f(
+                "The Grand Comics Database could not be added: {why}",
+                &[("why", &e.to_string())],
+            ));
+        }
+    }
+
     /// Tells the owner something in a dialog of its own, for what should
     /// not slip by as a toast.
     fn tell(&self, heading: &str, body: &str) {
@@ -674,15 +781,19 @@ impl App {
         let client = self.client.clone();
         let model = self.config.model.clone();
         let input = self.sender.input_sender().clone();
+        let catalog = self.catalog.clone();
         gio::spawn_blocking(move || {
             let emit = |event: Event| input.emit(AppMsg::RunEvent(event));
+            let catalog = catalog
+                .as_deref()
+                .map(|c| c as &dyn assistant_core::lookup::Catalog);
             let summary = match provider {
                 ProviderChoice::Anthropic => {
                     let provider = AnthropicLookup {
                         api: Anthropic::new(&client, &key),
                         model,
                     };
-                    queue::run(&provider, None, &queries, &options, &cancel, &emit)
+                    queue::run(&provider, catalog, &queries, &options, &cancel, &emit)
                 }
                 ProviderChoice::OpenRouter => {
                     // Prices are not needed: OpenRouter reports what each
@@ -701,7 +812,7 @@ impl App {
                             web_search_price: None,
                         },
                     };
-                    queue::run(&provider, None, &queries, &options, &cancel, &emit)
+                    queue::run(&provider, catalog, &queries, &options, &cancel, &emit)
                 }
             };
             if let Ok(summary) = summary {
@@ -836,6 +947,28 @@ impl App {
     }
 }
 
+/// Asks before the owner's copy of the Grand Comics Database is deleted.
+fn confirm_remove_catalogue(window: &adw::ApplicationWindow, sender: ComponentSender<App>) {
+    let dialog = adw::AlertDialog::builder()
+        .heading(gettext("Remove Your Copy of the Grand Comics Database?"))
+        .body(gettext(
+            "Its index is deleted, and lookups search the web alone. You can add it again \
+             from the dump at any time.",
+        ))
+        .close_response("cancel")
+        .build();
+    dialog.add_responses(&[
+        ("cancel", &gettext("_Cancel")),
+        ("remove", &gettext("_Remove")),
+    ]);
+    dialog.set_response_appearance("remove", adw::ResponseAppearance::Destructive);
+    dialog.choose(Some(window), None::<&gio::Cancellable>, move |response| {
+        if response == "remove" {
+            sender.input(AppMsg::RemoveCatalogue);
+        }
+    });
+}
+
 /// A key file error as a sentence for the owner.
 fn error_text(error: &KeyFileError) -> String {
     match error {
@@ -927,6 +1060,10 @@ impl SimpleComponent for App {
         );
         menu.append(Some(&gettext("_Set Up Again…")), Some("win.setup"));
         menu.append(Some(&gettext("_Remove Saved Key…")), Some("win.forget"));
+        menu.append(
+            Some(&gettext("_Grand Comics Database…")),
+            Some("win.catalogue"),
+        );
         let header = adw::HeaderBar::new();
         header.pack_end(
             &gtk::MenuButton::builder()
@@ -1081,6 +1218,10 @@ impl SimpleComponent for App {
             }
         };
         review_button.set_visible(!results.is_empty());
+        let (catalog, catalog_problem) = match catalogue::open() {
+            Ok(catalog) => (catalog.map(Arc::new), None),
+            Err(why) => (None, Some(why)),
+        };
         let model = Self {
             session: Session::locked(config::key_file().exists(), Instant::now()),
             config,
@@ -1098,6 +1239,8 @@ impl SimpleComponent for App {
             view: View::Add,
             pending: Vec::new(),
             replacing: None,
+            catalog,
+            importing: None,
             toasts,
             sender,
         };
@@ -1105,6 +1248,7 @@ impl SimpleComponent for App {
         model.action("passphrase", || AppMsg::ChangePassphrase);
         model.action("setup", || AppMsg::SetUpAgain);
         model.action("forget", || AppMsg::Forget);
+        model.action("catalogue", || AppMsg::Catalogue);
         model.show_start();
         model.review.show_list(&model.results);
         if let Some(why) = unreadable {
@@ -1112,6 +1256,9 @@ impl SimpleComponent for App {
                 "The saved looked-up books could not be read and were set aside: {why}",
                 &[("why", &why)],
             ));
+        }
+        if let Some(why) = catalog_problem {
+            model.toast(&why);
         }
         ComponentParts { model, widgets: () }
     }
@@ -1453,6 +1600,54 @@ impl SimpleComponent for App {
                 let _ = std::fs::remove_file(config::key_file());
                 self.session = Session::locked(false, Instant::now());
                 self.show_setup();
+            }
+            AppMsg::Catalogue => self.show_catalogue(),
+            AppMsg::CatalogueFile(file) => self.add_catalogue(&file),
+            AppMsg::CatalogueProgress(step, count) => {
+                if let Some(progress) = &mut self.importing {
+                    progress.show(step, count);
+                }
+            }
+            AppMsg::CatalogueAdded(result) => {
+                if let Some(progress) = self.importing.take() {
+                    progress.close();
+                }
+                match result {
+                    Ok(_) => match catalogue::open() {
+                        Ok(Some(catalog)) => {
+                            let about = catalog.about();
+                            self.catalog = Some(Arc::new(catalog));
+                            self.tell(
+                                &gettext("Grand Comics Database Added"),
+                                &gettext_f(
+                                    "{copy} Lookups check it before searching the web.",
+                                    &[("copy", &catalogue::described(&about))],
+                                ),
+                            );
+                        }
+                        Ok(None) => {}
+                        Err(why) => self.toast(&why),
+                    },
+                    Err(assistant_gcd::ImportError::Cancelled) => {
+                        self.toast(&catalogue::failed(&assistant_gcd::ImportError::Cancelled));
+                    }
+                    Err(e) => self.tell(
+                        &gettext("Could Not Add the Grand Comics Database"),
+                        &catalogue::failed(&e),
+                    ),
+                }
+            }
+            AppMsg::RemoveCatalogue => {
+                self.catalog = None;
+                match catalogue::remove() {
+                    Ok(()) => self.toast(&gettext(
+                        "Your copy of the Grand Comics Database is removed.",
+                    )),
+                    Err(e) => self.toast(&gettext_f(
+                        "Your copy of the Grand Comics Database could not be removed: {why}",
+                        &[("why", &e.to_string())],
+                    )),
+                }
             }
         }
     }
