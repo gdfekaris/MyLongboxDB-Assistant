@@ -209,6 +209,78 @@ pub fn confine_thread() -> Result<Enforced, Error> {
     })
 }
 
+/// Stops the calling thread, and every thread it starts, from reaching
+/// anything but the files it works on, for reading a large untrusted
+/// file, such as the owner's copy of the Grand Comics Database, into the
+/// app's own folder: it may read only beneath `read`, read and change
+/// files only beneath `write`, and make, connect, or use no socket and
+/// start no program. Like the other limits it cannot be undone, so call
+/// it only on a thread made for the work.
+///
+/// Writing to a socket the process opened earlier, through `write`,
+/// stays possible here, as the thread must write its own files; the
+/// calls that send or connect are refused.
+pub fn confine_to_files(read: &[&Path], write: &[&Path]) -> Result<Enforced, Error> {
+    let fail = |e: landlock::RulesetError| error("the kernel refused the file limits", e);
+    let status = Ruleset::default()
+        .handle_access(AccessFs::from_all(ABI::V5))
+        .map_err(fail)?
+        .handle_access(AccessNet::from_all(ABI::V5))
+        .map_err(fail)?
+        .create()
+        .map_err(fail)?
+        .add_rules(path_beneath_rules(read, AccessFs::from_read(ABI::V5)))
+        .map_err(fail)?
+        .add_rules(path_beneath_rules(write, AccessFs::from_all(ABI::V5)))
+        .map_err(fail)?
+        .restrict_self()
+        .map_err(fail)?;
+    let program = files_only_filter()?;
+    seccompiler::apply_filter(&program).map_err(|e| error("the kernel refused the filter", e))?;
+    Ok(match status.ruleset {
+        RulesetStatus::FullyEnforced => Enforced::Fully,
+        RulesetStatus::PartiallyEnforced => Enforced::Partly,
+        RulesetStatus::NotEnforced => Enforced::Not,
+    })
+}
+
+/// The filter for [`confine_to_files`]: no socket made, connected,
+/// listened on, or sent through, no program started, and no io_uring,
+/// whose requests the rules would not see.
+fn files_only_filter() -> Result<BpfProgram, Error> {
+    let rules: BTreeMap<i64, Vec<SeccompRule>> = [
+        libc::SYS_socket,
+        libc::SYS_socketpair,
+        libc::SYS_connect,
+        libc::SYS_bind,
+        libc::SYS_listen,
+        libc::SYS_accept,
+        libc::SYS_accept4,
+        libc::SYS_sendto,
+        libc::SYS_sendmsg,
+        libc::SYS_sendmmsg,
+        libc::SYS_io_uring_setup,
+        libc::SYS_execve,
+        libc::SYS_execveat,
+    ]
+    .into_iter()
+    // No conditions: always refused.
+    .map(|call| (call, Vec::new()))
+    .collect();
+    let arch = TargetArch::try_from(std::env::consts::ARCH)
+        .map_err(|e| error("this processor is not supported", e))?;
+    let filter = SeccompFilter::new(
+        rules,
+        SeccompAction::Allow,
+        SeccompAction::Errno(libc::EACCES as u32),
+        arch,
+    )
+    .map_err(|e| error("building the filter", e))?;
+    filter
+        .try_into()
+        .map_err(|e: seccompiler::BackendError| error("compiling the filter", e))
+}
+
 /// The confined thread's filter, which also holds where the kernel has
 /// no Landlock: every way of opening a file or making, using, or passing
 /// a socket is refused, and writing is allowed only to descriptors 0 to
