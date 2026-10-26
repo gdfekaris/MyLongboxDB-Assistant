@@ -103,7 +103,8 @@ CREATE TABLE issue (
     id INTEGER PRIMARY KEY, series_id INTEGER NOT NULL, number TEXT,
     number_key TEXT NOT NULL, variant_of INTEGER, variant_name TEXT, title TEXT,
     publication_date TEXT, key_date TEXT, on_sale_date TEXT, price TEXT,
-    page_count REAL, barcode TEXT, isbn TEXT, indicia_publisher TEXT, notes TEXT
+    page_count REAL, barcode TEXT, barcode_key TEXT, isbn TEXT, indicia_publisher TEXT,
+    notes TEXT
 ) STRICT;
 CREATE TABLE story (
     id INTEGER PRIMARY KEY, issue_id INTEGER NOT NULL, seq INTEGER, kind INTEGER,
@@ -123,7 +124,7 @@ CREATE TABLE appearance (
 const INDEXES: &str = "
 CREATE INDEX series_key ON series (name_key, year_began);
 CREATE INDEX issue_number ON issue (series_id, number_key);
-CREATE INDEX issue_barcode ON issue (barcode) WHERE barcode IS NOT NULL;
+CREATE INDEX issue_barcode ON issue (barcode_key) WHERE barcode_key IS NOT NULL;
 CREATE INDEX issue_variant ON issue (variant_of) WHERE variant_of IS NOT NULL;
 CREATE INDEX story_issue ON story (issue_id, seq);
 CREATE INDEX credit_story ON credit (story_id) WHERE story_id IS NOT NULL;
@@ -233,7 +234,7 @@ const COPIES: &[Copy] = &[
                  LEFT JOIN gcd_indicia_publisher ip ON ip.id = i.indicia_publisher_id
                  WHERE i.deleted = 0",
         insert: "INSERT OR IGNORE INTO issue VALUES
-                 (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+                 (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
         convert: |row| {
             let (Some(id), Some(series)) = (int(row.get_ref(0)?), int(row.get_ref(1)?)) else {
                 return Ok(None);
@@ -243,6 +244,7 @@ const COPIES: &[Copy] = &[
             let digits = |v: Option<String>, max: usize| {
                 v.filter(|d| d.len() <= max && d.bytes().all(|b| b.is_ascii_digit()))
             };
+            let barcode = digits(text(row.get_ref(11)?, 40), 20);
             Ok(Some(vec![
                 Value::Integer(id),
                 Value::Integer(series),
@@ -256,7 +258,8 @@ const COPIES: &[Copy] = &[
                 t(date_text(text(row.get_ref(8)?, 10))),
                 t(text(row.get_ref(9)?, 200)),
                 r(amount(row.get_ref(10)?).filter(|p| *p <= 10_000.0)),
-                t(digits(text(row.get_ref(11)?, 40), 20)),
+                t(barcode.clone()),
+                t(barcode.as_deref().map(crate::keys::barcode_key)),
                 t(digits(text(row.get_ref(12)?, 13), 13)),
                 t(text(row.get_ref(13)?, 300)),
                 t(text(row.get_ref(14)?, 1_000)),

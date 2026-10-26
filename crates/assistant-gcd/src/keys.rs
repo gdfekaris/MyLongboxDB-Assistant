@@ -33,6 +33,16 @@ pub fn number_key(number: &str) -> String {
     text.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+/// A barcode's digits as both a cover and the catalogue may give them:
+/// without leading zeros, which a UPC written as an EAN-13 adds.
+pub fn barcode_key(digits: &str) -> String {
+    digits
+        .chars()
+        .filter(char::is_ascii_digit)
+        .skip_while(|c| *c == '0')
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -52,6 +62,15 @@ mod tests {
         // A title that is only The keeps it.
         assert_eq!(series_key("The"), "the");
         assert_eq!(series_key("Les Robots Étonnants"), "les robots étonnants");
+    }
+
+    #[test]
+    fn barcodes_match_with_or_without_a_leading_zero() {
+        assert_eq!(
+            barcode_key("07148602457605"),
+            barcode_key("7 14860 24576 0 5")
+        );
+        assert_eq!(barcode_key("75960608936900111"), "75960608936900111");
     }
 
     #[test]

@@ -16,6 +16,6 @@ mod dump;
 mod index;
 mod keys;
 
-pub use catalog::{About, Catalog, CatalogError};
+pub use catalog::{About, Catalog, CatalogError, MAX_RECORD, Record};
 pub use index::{INDEX_FILE, ImportError, Imported, Step, import};
-pub use keys::{number_key, series_key};
+pub use keys::{barcode_key, number_key, series_key};
