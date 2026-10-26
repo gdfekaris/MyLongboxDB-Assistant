@@ -1138,12 +1138,35 @@ fn the_barcode_box_on_the_cover_tells_direct_from_newsstand() {
 }
 
 #[test]
+fn an_issue_with_first_appearances_is_known_for_them_alone() {
+    let cast = |first: bool| {
+        let mut answer = full_answer();
+        answer["characters"] = json!([
+            {"name": "Captain Cog", "first_appearance": false, "source": 1, "confidence": "high"},
+            {"name": "Tinman", "first_appearance": first, "source": 1, "confidence": "high"}
+        ]);
+        let provider = Scripted::new(vec![researched(2), answered(answer), no_problems()]);
+        let draft = run(&provider, "Astonishing Robot Tales (1954) #1")
+            .0
+            .unwrap();
+        draft
+            .characters
+            .iter()
+            .map(|e| e.name.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(cast(true), ["Tinman"]);
+    // Without one, the issue's characters stay for the owner to choose.
+    assert_eq!(cast(false), ["Captain Cog", "Tinman"]);
+}
+
+#[test]
 fn characters_go_by_the_names_they_are_known_by() {
     let mut answer = full_answer();
     answer["characters"] = json!([
         {"name": "Tinman (Tom Tinsley)", "first_appearance": true, "source": 1, "confidence": "high"},
         {"name": "Tinman", "first_appearance": false, "source": 2, "confidence": "high"},
-        {"name": "Professor (Ret.) Gear", "first_appearance": false, "source": 1, "confidence": "high"}
+        {"name": "Professor (Ret.) Gear", "first_appearance": true, "source": 1, "confidence": "high"}
     ]);
     answer["teams"] = json!([
         {"name": "Robot Rangers (Earth-54)", "first_appearance": true, "source": 1, "confidence": "high"}

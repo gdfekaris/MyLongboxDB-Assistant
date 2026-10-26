@@ -1112,6 +1112,16 @@ fn distribution_from_box(draft: &mut Draft, reading: &Reading) {
     }
 }
 
+/// The characters an issue is known for: where it has first
+/// appearances, those alone, as the collection keeps them, not the
+/// title character beside them.
+fn known_for(draft: &mut Draft) {
+    let first = |e: &Entry| e.detail == Detail::FirstAppearance(true);
+    if draft.characters.iter().any(first) {
+        draft.characters.retain(first);
+    }
+}
+
 /// Characters and teams by the names they go by, as the collection
 /// keeps them: Elektra, not Elektra (Elektra Natchios). Applied after the
 /// check, which compares names with their sources' own words.
@@ -1272,6 +1282,7 @@ fn look_up_from(
         value.text = fields::house_style(value.key, &value.text);
     }
     known_names(&mut draft);
+    known_for(&mut draft);
     annual_series(&mut draft);
     if from_text {
         sale_month(&mut draft);
