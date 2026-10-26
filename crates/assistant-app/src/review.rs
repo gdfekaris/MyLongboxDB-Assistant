@@ -11,7 +11,7 @@ use adw::prelude::*;
 use assistant_core::lookup::{
     COVER_PHOTO, Detail, Draft, Entry, FIELDS, Identity, KNOWLEDGE, Kind, Source, Value, spec,
 };
-use assistant_core::model::{Confidence, Role};
+use assistant_core::model::{Category, Confidence, Grade, GradeType, Role};
 use assistant_core::results::ReviewBook;
 
 use crate::format::shown_cover_date;
@@ -45,6 +45,99 @@ pub enum ReviewMsg {
     Discard(usize),
     /// Look the book up again as the candidate the owner picked.
     Choose(usize, usize),
+    /// The grade the owner typed for their copy, as typed.
+    Grade(usize, String),
+    GradedBy(usize, Option<GradeType>),
+    Certificate(usize, String),
+}
+
+/// Who graded a copy, as MyLongboxDB offers the choice.
+const GRADERS: [Option<GradeType>; 5] = [
+    None,
+    Some(GradeType::Raw),
+    Some(GradeType::Cgc),
+    Some(GradeType::Cbcs),
+    Some(GradeType::Pgx),
+];
+
+fn grader_label(grader: Option<GradeType>) -> String {
+    match grader {
+        None => gettext("Not graded"),
+        Some(GradeType::Raw) => gettext("My own estimate"),
+        Some(GradeType::Cgc) => "CGC".into(),
+        Some(GradeType::Cbcs) => "CBCS".into(),
+        Some(GradeType::Pgx) => "PGX".into(),
+    }
+}
+
+/// The owner's own copy: its grade, who graded it, and a grading
+/// company's certificate number. These are the owner's, not the
+/// lookup's, so they need no tick.
+fn copy_group(index: usize, book: &ReviewBook, emit: &Emit) -> adw::PreferencesGroup {
+    let g = group(&gettext("This Copy"));
+    let copy = &book.copy;
+    let grade = adw::EntryRow::builder()
+        .title(gettext("Grade (0.5 to 10.0)"))
+        .text(copy.grade.map(|g| g.to_string()).unwrap_or_default())
+        .build();
+    // Kept as it is typed, once it reads as a grade, so nothing typed is
+    // lost by moving on; Enter says why one that does not read is not.
+    {
+        let emit = emit.clone();
+        grade.connect_changed(move |row| {
+            let text = row.text();
+            if text.trim().is_empty() || Grade::parse(&text).is_some() {
+                row.remove_css_class("error");
+                emit(ReviewMsg::Grade(index, text.to_string()));
+            } else {
+                row.add_css_class("error");
+            }
+        });
+    }
+    {
+        let emit = emit.clone();
+        grade.connect_entry_activated(move |row| {
+            emit(ReviewMsg::Grade(index, row.text().to_string()));
+        });
+    }
+    let names: Vec<String> = GRADERS.iter().map(|g| grader_label(*g)).collect();
+    let graded_by = adw::ComboRow::builder()
+        .title(gettext("Graded By"))
+        .model(&gtk::StringList::new(
+            &names.iter().map(String::as_str).collect::<Vec<_>>(),
+        ))
+        .selected(
+            GRADERS
+                .iter()
+                .position(|g| *g == copy.grade_type)
+                .unwrap_or(0) as u32,
+        )
+        .build();
+    let cert = adw::EntryRow::builder()
+        .title(gettext("Certificate Number"))
+        .text(&copy.cert_number)
+        .sensitive(copy.grade_type.is_some_and(GradeType::is_company))
+        .build();
+    {
+        let emit = emit.clone();
+        let cert = cert.clone();
+        graded_by.connect_selected_notify(move |row| {
+            let grader = GRADERS.get(row.selected() as usize).copied().flatten();
+            // Only a grading company issues a certificate.
+            cert.set_sensitive(grader.is_some_and(GradeType::is_company));
+            emit(ReviewMsg::GradedBy(index, grader));
+        });
+    }
+    {
+        let emit = emit.clone();
+        cert.connect_changed(move |row| {
+            emit(ReviewMsg::Certificate(index, row.text().to_string()));
+        });
+    }
+    g.add(&grade);
+    g.add(&graded_by);
+    g.add(&cert);
+    g
 }
 
 type Emit = Rc<dyn Fn(ReviewMsg)>;
@@ -423,6 +516,14 @@ fn book_content(index: usize, book: &ReviewBook, emit: &Emit) -> gtk::Box {
                 }
             }
             column.append(&details);
+            // A collected edition has a condition in MyLongboxDB, not a
+            // grade, which the owner sets there.
+            let collected = draft
+                .value("category")
+                .is_some_and(|v| v.accepted && v.text == Category::CollectedEdition.code());
+            if !collected {
+                column.append(&copy_group(index, book, emit));
+            }
             for (title, list, entries) in [
                 (gettext("Credits"), List::Credits, &draft.credits),
                 (gettext("Characters"), List::Characters, &draft.characters),

@@ -1,7 +1,7 @@
 //! Looked-up books kept until they are exported, as they cost money to
 //! look up again. The file holds each book's draft, whether it is
-//! included, and whether the owner has reviewed it, as JSON, never a
-//! key. It is read back as strictly as a
+//! included, whether the owner has reviewed it, and the grade they gave
+//! their copy, as JSON, never a key. It is read back as strictly as a
 //! model's answer: every value is checked again by its field's rules, so
 //! a damaged or altered file cannot put into an export what a lookup
 //! could not. The owner's photos of each book are kept beside it, one
@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 use crate::issue_number::IssueNumber;
 use crate::lines::BookQuery;
 use crate::lookup::{Candidate, Detail, Draft, Entry, Identity, Source, Value, check, spec};
-use crate::model::{Confidence, Jpeg, Role};
+use crate::model::{Confidence, CopyInfo, Grade, GradeType, Jpeg, Role};
 
 /// The format written; a file of another one is not read.
 const VERSION: u32 = 1;
@@ -25,6 +25,14 @@ const MAX_FILE_BYTES: u64 = 50 * 1024 * 1024;
 const MAX_BOOKS: usize = 10_000;
 /// The longest text kept in any one place.
 const MAX_TEXT: usize = 20_000;
+/// The longest certificate number kept; graders print ten digits or so.
+const MAX_CERT: usize = 40;
+
+/// A certificate number as the owner typed it, made safe to keep: hidden
+/// characters dropped, spacing tidied, and its length capped.
+pub fn cert_number(text: &str) -> String {
+    crate::lookup::clean(text, MAX_CERT)
+}
 /// A kept photo larger than this is not read. The app keeps them at
 /// 1,600 pixels a side, far smaller.
 const MAX_PHOTO_BYTES: u64 = 16 * 1024 * 1024;
@@ -60,6 +68,8 @@ pub struct ReviewBook {
     /// Marked by the owner once they have looked the book over, to keep
     /// track of a long review; the export does not depend on it.
     pub reviewed: bool,
+    /// The owner's own grade of their copy, typed on the review page.
+    pub copy: CopyInfo,
     pub front: Option<Photo>,
     pub back: Option<Photo>,
 }
@@ -72,6 +82,7 @@ impl ReviewBook {
             draft,
             included,
             reviewed: false,
+            copy: CopyInfo::default(),
             front: None,
             back: None,
         }
@@ -81,6 +92,18 @@ impl ReviewBook {
     /// their photos as its covers. `None` for a book not identified.
     pub fn book(&self, this_year: u16) -> Option<crate::model::Book> {
         let mut book = self.draft.book(this_year)?;
+        // A collected edition has a condition in MyLongboxDB, not a grade,
+        // and only a grading company issues a certificate.
+        if book.category != crate::model::Category::CollectedEdition {
+            book.copy = CopyInfo {
+                cert_number: if self.copy.grade_type.is_some_and(GradeType::is_company) {
+                    self.copy.cert_number.clone()
+                } else {
+                    String::new()
+                },
+                ..self.copy.clone()
+            };
+        }
         book.front = self.front.as_ref().map(|p| p.jpeg.clone());
         book.back = self.back.as_ref().map(|p| p.jpeg.clone());
         Some(book)
@@ -110,6 +133,13 @@ struct Saved {
     /// Files from before books could be marked reviewed have none.
     #[serde(default)]
     reviewed: bool,
+    /// Files from before copies could be graded have none of these.
+    #[serde(default)]
+    grade: Option<String>,
+    #[serde(default)]
+    grade_type: Option<String>,
+    #[serde(default)]
+    cert_number: String,
     /// The names the book's photos are kept by; files from before photos
     /// were kept have none.
     #[serde(default)]
@@ -225,6 +255,9 @@ pub fn to_json(books: &[ReviewBook]) -> String {
             Saved {
                 included: b.included,
                 reviewed: b.reviewed,
+                grade: b.copy.grade.map(|g| g.to_string()),
+                grade_type: b.copy.grade_type.map(|g| g.code().to_owned()),
+                cert_number: b.copy.cert_number.clone(),
                 front: b.front.as_ref().map(|p| p.name.clone()),
                 back: b.back.as_ref().map(|p| p.name.clone()),
                 line: d.query.line,
@@ -395,6 +428,13 @@ fn book(saved: Saved, this_year: u16, photo: &dyn Fn(&str) -> Option<Photo>) -> 
         },
         included,
         reviewed: saved.reviewed,
+        // Checked as the review page checks what the owner types; a value
+        // that does not read is dropped.
+        copy: CopyInfo {
+            grade: saved.grade.as_deref().and_then(Grade::parse),
+            grade_type: saved.grade_type.as_deref().and_then(GradeType::from_code),
+            cert_number: cert_number(&saved.cert_number),
+        },
         front: saved.front.as_deref().and_then(photo),
         back: saved.back.as_deref().and_then(photo),
     })

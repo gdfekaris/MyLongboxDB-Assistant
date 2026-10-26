@@ -1,8 +1,8 @@
 //! A book as it goes into the export: every field MyLongboxDB keeps for a
 //! series, an issue, and an edition, each already checked by the rules
-//! MyLongboxDB's import applies. Copy-level fields, such as grade, price
-//! paid, and storage box, are the owner's to add in MyLongboxDB and are
-//! not here.
+//! MyLongboxDB's import applies, and the copy's grade. Other copy-level
+//! fields, such as price paid and storage box, are the owner's to add in
+//! MyLongboxDB and are not here.
 
 use std::fmt;
 
@@ -68,6 +68,85 @@ code_enum! {
         Softcover = "softcover",
         OversizedHardcover = "oversized_hardcover",
     }
+}
+
+code_enum! {
+    /// Who graded a comic or magazine, if anyone.
+    pub enum GradeType {
+        /// The owner's own estimate.
+        Raw = "raw",
+        Cgc = "cgc",
+        Cbcs = "cbcs",
+        Pgx = "pgx",
+    }
+}
+
+impl GradeType {
+    /// Whether a grading company graded it, and so gave it a certificate
+    /// number.
+    pub fn is_company(self) -> bool {
+        self != Self::Raw
+    }
+}
+
+/// A grade from 0.5 to 10.0 in steps of 0.1, held in tenths. Copied from
+/// MyLongboxDB's core, whose import reads the same forms.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Grade(u8);
+
+impl Grade {
+    pub const MIN: Self = Self(5);
+    pub const MAX: Self = Self(100);
+
+    pub fn from_tenths(tenths: u8) -> Option<Self> {
+        (Self::MIN.0..=Self::MAX.0)
+            .contains(&tenths)
+            .then_some(Self(tenths))
+    }
+
+    pub fn tenths(self) -> u8 {
+        self.0
+    }
+
+    /// Reads `9.8`, `9`, or `10.0`. Anything finer than tenths is refused.
+    pub fn parse(text: &str) -> Option<Self> {
+        let text = text.trim();
+        let (whole, tenth) = text.split_once('.').unwrap_or((text, "0"));
+        if whole.is_empty()
+            || whole.len() > 2
+            || tenth.len() != 1
+            || !whole
+                .bytes()
+                .chain(tenth.bytes())
+                .all(|b| b.is_ascii_digit())
+        {
+            return None;
+        }
+        // Two digits can pass for a whole grade, and 26 tenfold already
+        // overflows a u8, so the sum is checked rather than assumed small.
+        let tenths = whole
+            .parse::<u8>()
+            .ok()?
+            .checked_mul(10)?
+            .checked_add(tenth.parse::<u8>().ok()?)?;
+        Self::from_tenths(tenths)
+    }
+}
+
+impl fmt::Display for Grade {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}.{}", self.0 / 10, self.0 % 10)
+    }
+}
+
+/// The owner's own copy, as far as the Assistant records it: its grade,
+/// who graded it, and a grading company's certificate number.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct CopyInfo {
+    pub grade: Option<Grade>,
+    pub grade_type: Option<GradeType>,
+    /// Empty unless a grading company graded it.
+    pub cert_number: String,
 }
 
 code_enum! {
@@ -207,6 +286,7 @@ pub struct Book {
     pub series: SeriesInfo,
     pub issue: IssueInfo,
     pub edition: EditionInfo,
+    pub copy: CopyInfo,
     pub front: Option<Jpeg>,
     pub back: Option<Jpeg>,
 }
@@ -221,6 +301,7 @@ impl Book {
             },
             issue: IssueInfo::default(),
             edition: EditionInfo::default(),
+            copy: CopyInfo::default(),
             front: None,
             back: None,
         }
@@ -291,6 +372,11 @@ impl Book {
         if names.into_iter().any(|n| n.trim().is_empty()) {
             problem("a name in a list is blank");
         }
+        if self.category == Category::CollectedEdition
+            && (self.copy.grade.is_some() || self.copy.grade_type.is_some())
+        {
+            problem("collected editions have a condition, not a grade");
+        }
         problems
     }
 }
@@ -360,6 +446,31 @@ mod tests {
             assert_eq!(problems.len(), 1, "{word}: {problems:?}");
             assert!(problems[0].contains(word), "{word}: {problems:?}");
         }
+    }
+
+    #[test]
+    fn grades_read_as_mylongboxdb_reads_them() {
+        assert_eq!(Grade::parse("9.8").map(Grade::tenths), Some(98));
+        assert_eq!(Grade::parse("9").map(Grade::tenths), Some(90));
+        assert_eq!(Grade::parse("10").map(Grade::tenths), Some(100));
+        assert_eq!(Grade::parse("0.5").map(Grade::tenths), Some(5));
+        for bad in [
+            "0", "0.0", "0.4", "10.1", "9.85", "9.", ".5", "-1", "nm", "", "100", "11", "26",
+            "25.6", "99.9",
+        ] {
+            assert_eq!(Grade::parse(bad), None, "{bad}");
+        }
+        assert_eq!(Grade::parse("9").unwrap().to_string(), "9.0");
+        assert_eq!(Grade::MAX.to_string(), "10.0");
+        assert_eq!(GradeType::from_code("cbcs"), Some(GradeType::Cbcs));
+        assert!(!GradeType::Raw.is_company());
+    }
+
+    #[test]
+    fn a_collected_edition_has_no_grade() {
+        let mut book = Book::new(Category::CollectedEdition, "Watchmen");
+        book.copy.grade = Grade::parse("9.8");
+        assert_eq!(book.problems().len(), 1);
     }
 
     #[test]

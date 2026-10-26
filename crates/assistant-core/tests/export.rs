@@ -9,8 +9,8 @@ use std::io::{Cursor, Read};
 
 use assistant_core::{
     Appearance, ArcPart, Barcode, Binding, Book, COLUMNS, Category, CoverDate, Credit, Date,
-    Distribution, Isbn, IssueNumber, Jpeg, MagazineFormat, PartialDate, Role, parse_collects,
-    write_export,
+    Distribution, Grade, GradeType, Isbn, IssueNumber, Jpeg, MagazineFormat, PartialDate, Role,
+    parse_collects, write_export,
 };
 
 /// A small cover photo, 24 by 36 pixels, drawn for these tests.
@@ -138,6 +138,9 @@ fn books() -> Vec<Book> {
     first.edition.barcode = Barcode::parse("759606089369 00111");
     first.front = cover();
     first.back = cover();
+    first.copy.grade = Grade::parse("9.8");
+    first.copy.grade_type = Some(GradeType::Cgc);
+    first.copy.cert_number = "4012345001".into();
 
     let mut variant = robot_tales("1");
     variant.edition.variant = "Cover B".into();
@@ -145,6 +148,8 @@ fn books() -> Vec<Book> {
     variant.edition.distribution = Some(Distribution::Direct);
     variant.edition.cover_artists = vec!["Vera Variant".into()];
     variant.front = cover();
+    variant.copy.grade = Grade::parse("9");
+    variant.copy.grade_type = Some(GradeType::Raw);
 
     // Typed in another case, it is still the same series and issue.
     let mut newsstand = robot_tales("#1");
@@ -251,7 +256,7 @@ fn every_book_is_a_row_with_its_photos() {
                 assert_eq!(files[&row[column]], COVER);
             }
         }
-        assert!(row["Date Added"].is_empty() && row["Grade"].is_empty());
+        assert!(row["Date Added"].is_empty() && row["Label"].is_empty());
     }
     assert!(files["collection.csv"].ends_with(b"\r\n"));
 }
@@ -296,6 +301,13 @@ fn cells_are_written_as_mylongboxdb_writes_them() {
         first["Story Arcs"],
         "Rise of the Robots (part 1); Backup Feature"
     );
+    assert_eq!(first["Grade"], "9.8");
+    assert_eq!(first["Grade Type"], "cgc");
+    assert_eq!(first["Certificate Number"], "4012345001");
+    assert_eq!(rows[1]["Grade"], "9.0");
+    assert_eq!(rows[1]["Grade Type"], "raw");
+    assert_eq!(rows[1]["Certificate Number"], "");
+    assert_eq!(rows[2]["Grade"], "");
     assert_eq!(rows[2]["Series"], "astonishing robot tales");
     assert_eq!(rows[2]["Issue Number"], "1");
     assert_eq!(rows[3]["Issue Number"], "'-1");

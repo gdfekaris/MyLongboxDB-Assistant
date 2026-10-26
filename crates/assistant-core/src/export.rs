@@ -346,8 +346,9 @@ fn yes_no(flag: Option<bool>) -> String {
     }
 }
 
-/// A book's row, in the order of [`COLUMNS`]. Copy details and the time
-/// it was added are left blank for MyLongboxDB to fill.
+/// A book's row, in the order of [`COLUMNS`]. Copy details other than
+/// the grade, and the time it was added, are left blank for MyLongboxDB
+/// to fill.
 fn row(book: &Book, [copy, edition, issue, series]: [Uuid; 4]) -> Vec<String> {
     let (s, i, e) = (&book.series, &book.issue, &book.edition);
     let names = |list: &[crate::model::Appearance], first_only: bool| {
@@ -436,9 +437,15 @@ fn row(book: &Book, [copy, edition, issue, series]: [Uuid; 4]) -> Vec<String> {
         String::new(),
         join(e.cover_artists.iter().map(|a| a.trim())),
     ]);
-    // Grade through Value History, and Date Added: the owner's, or
+    let c = &book.copy;
+    row.extend([
+        text(c.grade),
+        text(c.grade_type.map(|g| g.code())),
+        c.cert_number.trim().to_owned(),
+    ]);
+    // Label through Value History, and Date Added: the owner's, or
     // MyLongboxDB's to fill.
-    row.extend(std::iter::repeat_n(String::new(), 21));
+    row.extend(std::iter::repeat_n(String::new(), 18));
     row.extend([
         photo(book.front.is_some(), "front"),
         photo(book.back.is_some(), "back"),

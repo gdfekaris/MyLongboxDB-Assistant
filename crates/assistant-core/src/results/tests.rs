@@ -291,6 +291,37 @@ fn results_from_before_books_were_marked_reviewed_still_read() {
 }
 
 #[test]
+fn a_copy_s_grade_is_kept_and_read_back_strictly() {
+    let mut books = books();
+    books[0].copy.grade = crate::Grade::parse("9.8");
+    books[0].copy.grade_type = Some(crate::GradeType::Cgc);
+    books[0].copy.cert_number = "4012345001".into();
+    assert_eq!(from_json(&to_json(&books), YEAR).unwrap(), books);
+    let mut file: Json = serde_json::from_str(&to_json(&books)).unwrap();
+    file["books"][0]["grade"] = json!("9.85");
+    file["books"][0]["grade_type"] = json!("ebay");
+    file["books"][0]["cert_number"] = json!(format!("40\u{202E}12{}", "9".repeat(100)));
+    let read = from_json(&file.to_string(), YEAR).unwrap();
+    assert_eq!(read[0].copy.grade, None);
+    assert_eq!(read[0].copy.grade_type, None);
+    assert!(!read[0].copy.cert_number.contains('\u{202E}'));
+    assert_eq!(read[0].copy.cert_number.chars().count(), MAX_CERT);
+}
+
+#[test]
+fn only_a_grading_company_s_certificate_is_exported() {
+    let mut book = books().remove(0);
+    book.copy.grade = crate::Grade::parse("9");
+    book.copy.cert_number = "4012345001".into();
+    book.copy.grade_type = Some(crate::GradeType::Raw);
+    let exported = book.book(YEAR).unwrap().copy;
+    assert_eq!(exported.grade, crate::Grade::parse("9.0"));
+    assert_eq!(exported.cert_number, "");
+    book.copy.grade_type = Some(crate::GradeType::Pgx);
+    assert_eq!(book.book(YEAR).unwrap().copy.cert_number, "4012345001");
+}
+
+#[test]
 fn the_owner_s_own_values_are_checked_and_accepted() {
     let mut d = draft();
     d.set_value("cover_price", "$0.10", YEAR).unwrap();

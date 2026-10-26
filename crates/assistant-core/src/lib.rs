@@ -24,7 +24,7 @@ pub use export::{COLUMNS, ExportError, write_export};
 pub use issue_number::{IssueNumber, IssueNumberError};
 pub use lines::{BookQuery, LineProblem, MAX_BOOKS_PER_LINE, parse_lines};
 pub use model::{
-    Appearance, ArcPart, Binding, Book, Category, Confidence, Credit, Distribution, EditionInfo,
-    IssueInfo, Jpeg, MagazineFormat, Role, SeriesInfo,
+    Appearance, ArcPart, Binding, Book, Category, Confidence, CopyInfo, Credit, Distribution,
+    EditionInfo, Grade, GradeType, IssueInfo, Jpeg, MagazineFormat, Role, SeriesInfo,
 };
 pub use money::{ParsePriceError, Picodollars, cents_string, parse_cents};

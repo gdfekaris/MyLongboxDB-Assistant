@@ -371,6 +371,36 @@ impl App {
                     self.save_results();
                 }
             }
+            ReviewMsg::Grade(i, text) => {
+                let Some(book) = self.results.get_mut(i) else {
+                    return;
+                };
+                match text.trim() {
+                    "" => book.copy.grade = None,
+                    typed => match assistant_core::Grade::parse(typed) {
+                        Some(grade) => book.copy.grade = Some(grade),
+                        None => {
+                            self.toast(&gettext(
+                                "Grades run from 0.5 to 10.0, in tenths, such as 9.4",
+                            ));
+                            return;
+                        }
+                    },
+                }
+                self.save_results();
+            }
+            ReviewMsg::GradedBy(i, grader) => {
+                if let Some(book) = self.results.get_mut(i) {
+                    book.copy.grade_type = grader;
+                    self.save_results();
+                }
+            }
+            ReviewMsg::Certificate(i, text) => {
+                if let Some(book) = self.results.get_mut(i) {
+                    book.copy.cert_number = results::cert_number(&text);
+                    self.save_results();
+                }
+            }
             ReviewMsg::Reviewed(i, on) => {
                 if let Some(book) = self.results.get_mut(i) {
                     book.reviewed = on;
