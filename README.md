@@ -1,12 +1,12 @@
 # MyLongboxDB Assistant
 
-A Linux desktop app that fills in the details of comic books, magazines,
-and collected editions for
+A Linux desktop app that fills in the details of comic books for
 [MyLongboxDB](https://github.com/gdfekaris/MyLongboxDB). Give it a cover
 photo, or a series and issue number, and a Claude model, called with
-your own Anthropic API key, looks the book up. You review
-every field it found, then the app writes the books as a MyLongboxDB
-full export, which MyLongboxDB imports like any other.
+your own Anthropic API key, looks the book up. You review every field it
+found, then the app writes the books as a MyLongboxDB full export, which
+MyLongboxDB imports like any other. Magazines and collected editions
+have their fields, but the lookup has not yet been tuned for them.
 
 The Assistant never opens your MyLongboxDB collection. MyLongboxDB
 itself stays offline; this separate app holds the network permission
