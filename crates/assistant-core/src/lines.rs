@@ -145,6 +145,12 @@ fn read_line(text: &str, this_year: u16) -> Result<Line, String> {
         }
     } else if let Some((at, year)) = find_year(head) {
         (head[..at].to_owned(), Some(year), head[at + 6..].to_owned())
+    } else if let Some(at) = head
+        .rfind(char::is_whitespace)
+        .filter(|at| head[at + 1..].eq_ignore_ascii_case("nn"))
+    {
+        // A one-shot published without a number: `Batman/Spawn: War Devil nn`.
+        (head[..at].to_owned(), None, head[at + 1..].to_owned())
     } else {
         let at = number_start(head).ok_or("needs an issue number")?;
         (head[..at].to_owned(), None, head[at..].to_owned())
@@ -304,6 +310,16 @@ mod tests {
         assert_eq!(shown("Batman 1A"), ["Batman #1A"]);
         assert_eq!(shown("Watchmen #Alpha"), ["Watchmen #Alpha"]);
         assert_eq!(shown("Batman, Inc. 1"), ["Batman, Inc. #1"]);
+        // A one-shot with no number, as MyLongboxDB writes it.
+        assert_eq!(
+            shown("Batman/Spawn: War Devil nn"),
+            ["Batman/Spawn: War Devil #nn"]
+        );
+        assert_eq!(
+            shown("Marvel Treasury Special #NN"),
+            ["Marvel Treasury Special #NN"]
+        );
+        assert!(problem("nn").contains("issue number"));
     }
 
     #[test]
