@@ -79,11 +79,13 @@ book, report the lead story's title, credits, and characters only.
 - Name each creator as the issue credited them at the time. Where a \
 source gives a later name beside the credited one, as in Christopher \
 Priest [as Jim Owsley], use the credited name, Jim Owsley.
-- Characters and teams: only those a collector would name the issue \
-for, meaning first appearances, origins, deaths, and important guests, \
-not the series' regular cast as a matter of course or everyone who \
-appears. Name a first appearance only where a source says it is one, \
-or it is well known.
+- Characters and teams: only those the issue is known for, meaning its \
+notable first appearances, origins, and deaths, and where it has none, \
+its title character. Never the regular cast or everyone who appears. \
+Name each as they are known, such as Elektra, never with a real name \
+in brackets, and a team that first appears together as the team, such \
+as Teenage Mutant Ninja Turtles, not each member. Name a first \
+appearance only where a source says it is one, or it is well known.
 - An annual is its own series: Amazing Spider-Man Annual #1, not \
 Amazing Spider-Man #Annual 1.
 ";

@@ -1062,6 +1062,30 @@ fn compare_barcodes(draft: &mut Draft, reading: &Reading) {
     }
 }
 
+/// Characters and teams by the names they go by, as the collection
+/// keeps them: Elektra, not Elektra (Elektra Natchios). Applied after the
+/// check, which compares names with their sources' own words.
+fn known_names(draft: &mut Draft) {
+    for list in [&mut draft.characters, &mut draft.teams] {
+        for entry in list.iter_mut() {
+            if let Some(open) = entry.name.find(" (")
+                && entry.name.ends_with(')')
+                && open > 0
+            {
+                entry.name.truncate(open);
+            }
+        }
+        let mut seen = Vec::new();
+        list.retain(|e| {
+            let fresh = !seen.contains(&e.name);
+            if fresh {
+                seen.push(e.name.clone());
+            }
+            fresh
+        });
+    }
+}
+
 /// The steps after reading: research, structure, check. `reading` is
 /// what the covers showed, for a photo lookup.
 fn look_up_from(
@@ -1197,6 +1221,7 @@ fn look_up_from(
     for value in &mut draft.values {
         value.text = fields::house_style(value.key, &value.text);
     }
+    known_names(&mut draft);
     annual_series(&mut draft);
     if from_text {
         sale_month(&mut draft);

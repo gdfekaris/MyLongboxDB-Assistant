@@ -182,7 +182,7 @@ pub const FIELDS: &[Field] = &[
         "key_issue",
         "Key issue",
         Kind::YesNo,
-        "yes only if reference sources call it a key issue, such as for a first appearance or death. Never for a facsimile or other reprint, whatever the original is.",
+        "yes for an issue comic experts call a key: the #1 of a major series, a major character's first appearance, origin, or death, or a famous story or cover. A later printing of such an issue is a key too. no for a minor character's first appearance, a second appearance, a store or promotional giveaway, and a facsimile or other reprint, whatever the original is.",
     ),
     judgment(
         "key_reason",
@@ -224,7 +224,7 @@ pub const FIELDS: &[Field] = &[
         "variant",
         "Variant",
         Kind::Text,
-        "The cover variant's name. A named edition comes first: a store or convention exclusive such as KRS Comics Exclusive or SDCC 1995 Convention variant, an event such as FCBD 2024, an edition such as Whitman Variant or Facsimile, a finish such as platinum cover or foil, or a ratio such as 1:25 ratio variant. Otherwise, for a cover by another artist, the artist's surname and cover, such as Okazaki cover, even where the publisher letters it, as Cover B. Blank for the standard cover.",
+        "The cover variant's name, in one of these forms. A facsimile edition: Facsimile, and for a variant of the facsimile, a comma and that variant's name, such as Facsimile, foil cover or Facsimile, Ross cover. A named edition: its name, such as Silver edition, Whitman variant, Canadian price variant, or FCBD 2024. One store's own exclusive: the store and exclusive, such as KRS Comics exclusive. A finish: such as foil cover or platinum cover. Any other cover by another artist, a ratio variant or one several stores share included: the artist's surname and cover, such as Okazaki cover, even where the publisher letters it, as Cover B; the publisher's letter only where no artist is known. Blank for the standard cover.",
     ),
     edition(
         "variant_cover_artists",

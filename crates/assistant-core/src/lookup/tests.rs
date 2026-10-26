@@ -1092,6 +1092,30 @@ fn a_grading_label_gives_the_number_the_cover_does_not() {
 }
 
 #[test]
+fn characters_go_by_the_names_they_are_known_by() {
+    let mut answer = full_answer();
+    answer["characters"] = json!([
+        {"name": "Tinman (Tom Tinsley)", "first_appearance": true, "source": 1, "confidence": "high"},
+        {"name": "Tinman", "first_appearance": false, "source": 2, "confidence": "high"},
+        {"name": "Professor (Ret.) Gear", "first_appearance": false, "source": 1, "confidence": "high"}
+    ]);
+    answer["teams"] = json!([
+        {"name": "Robot Rangers (Earth-54)", "first_appearance": true, "source": 1, "confidence": "high"}
+    ]);
+    let provider = Scripted::new(vec![researched(2), answered(answer), no_problems()]);
+    let draft = run(&provider, "Astonishing Robot Tales (1954) #1")
+        .0
+        .unwrap();
+    let names = |list: &[Entry]| list.iter().map(|e| e.name.clone()).collect::<Vec<_>>();
+    assert_eq!(
+        names(&draft.characters),
+        ["Tinman", "Professor (Ret.) Gear"]
+    );
+    assert_eq!(draft.characters[0].detail, Detail::FirstAppearance(true));
+    assert_eq!(names(&draft.teams), ["Robot Rangers"]);
+}
+
+#[test]
 fn a_reading_that_does_not_follow_the_schema_is_refused() {
     let mut extra = robot_cover();
     extra["items"]["secret"] = json!({"text": "x", "where": "y"});
