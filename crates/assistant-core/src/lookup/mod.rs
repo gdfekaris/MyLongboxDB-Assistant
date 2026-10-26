@@ -37,7 +37,7 @@ use crate::lines::BookQuery;
 use crate::model::{Category, Confidence, Jpeg, Role};
 use crate::money::Picodollars;
 use draft::fits_category;
-pub(crate) use fields::clean;
+pub use fields::clean;
 use schema::{Action, Checked, FieldAnswer, MAX_LIST, Named, Status, Structured};
 
 /// How hard the model should think.

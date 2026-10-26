@@ -47,7 +47,7 @@ jobs:
           ASSISTANT_REQUIRE_LANDLOCK_NET: '1'
         run: >-
           cargo test --locked -p assistant-core -p assistant-keys -p assistant-net
-          -p assistant-media -p assistant-sandbox
+          -p assistant-media -p assistant-sandbox -p assistant-gcd
       - name: The embedded root certificates are the ones listed
         working-directory: crates/assistant-net/src/roots
         run: sha256sum --check --strict SHA256SUMS

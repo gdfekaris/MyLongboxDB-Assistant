@@ -348,7 +348,7 @@ fn invisible(c: char) -> bool {
 /// Text from the model made safe to keep and show: control and
 /// direction-changing characters dropped, spacing tidied, and its length
 /// capped.
-pub(crate) fn clean(text: &str, max: usize) -> String {
+pub fn clean(text: &str, max: usize) -> String {
     text.split_whitespace()
         .collect::<Vec<_>>()
         .join(" ")
