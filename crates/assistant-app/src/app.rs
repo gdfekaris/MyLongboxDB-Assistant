@@ -254,9 +254,13 @@ impl App {
             .title(gettext(field.label))
             .activates_default(true)
             .build();
-        entry.set_text(
-            typed.unwrap_or_else(|| book.draft.value(key).map_or("", |v| v.text.as_str())),
-        );
+        match typed {
+            Some(typed) => entry.set_text(typed),
+            None => entry.set_text(&crate::review::shown_value(
+                key,
+                book.draft.value(key).map_or("", |v| v.text.as_str()),
+            )),
+        }
         let list = gtk::ListBox::builder()
             .selection_mode(gtk::SelectionMode::None)
             .css_classes(["boxed-list"])
@@ -1279,7 +1283,17 @@ impl SimpleComponent for App {
                 let Some(book) = self.results.get_mut(i) else {
                     return;
                 };
-                match book.draft.set_value(key, &text, this_year()) {
+                // A cover date is shown and typed as Apr 1990, and kept as
+                // MyLongboxDB imports it.
+                let kept = match (key, crate::format::parse_cover_date(&text)) {
+                    ("cover_date", Ok(date)) => Ok(date.map(|d| d.to_string()).unwrap_or_default()),
+                    ("cover_date", Err(())) => Err(gettext_f(
+                        "“{text}” is not a cover date, such as Apr 1990",
+                        &[("text", text.trim())],
+                    )),
+                    _ => Ok(text.clone()),
+                };
+                match kept.and_then(|kept| book.draft.set_value(key, &kept, this_year())) {
                     Ok(()) => {
                         self.save_results();
                         if let Some(book) = self.results.get(i) {

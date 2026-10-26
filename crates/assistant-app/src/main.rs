@@ -5,6 +5,7 @@
 mod add;
 mod app;
 mod config;
+mod format;
 mod i18n;
 mod photo_editor;
 mod photos;

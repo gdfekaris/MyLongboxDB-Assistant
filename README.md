@@ -82,7 +82,8 @@ listed in `po/POTFILES`:
 ```sh
 sdk "grep '\.rs\$' po/POTFILES | xgettext --files-from=- --language=Rust \
     --from-code=UTF-8 --add-comments=Translators --keyword=gettext \
-    --keyword=gettext_f --keyword=field:2 --keyword=edition:2 --keyword=judgment:2 \
+    --keyword=gettext_f --keyword=pgettext:1c,2 --keyword=field:2 --keyword=edition:2 \
+    --keyword=judgment:2 \
     --package-name=mylongboxdb-assistant \
     --msgid-bugs-address=https://github.com/gdfekaris/MyLongboxDB-Assistant/issues \
     --sort-by-file -o po/mylongboxdb-assistant.pot"

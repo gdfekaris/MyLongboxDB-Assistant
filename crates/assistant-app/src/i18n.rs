@@ -16,6 +16,12 @@ pub fn gettext(msgid: &str) -> String {
     glib::dgettext(None, msgid).into()
 }
 
+/// `msgid` in the reader's language, where the same English words may
+/// need different translations, as May the month and may the verb.
+pub fn pgettext(context: &str, msgid: &str) -> String {
+    glib::dpgettext2(None, context, msgid).into()
+}
+
 /// `template` with each `{name}` replaced by its value. A name not
 /// given is left as it is, so a slip in a translation shows rather than
 /// losing text.

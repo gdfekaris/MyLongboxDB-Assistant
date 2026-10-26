@@ -12,6 +12,7 @@ use assistant_core::lookup::{COVER_PHOTO, Detail, Draft, Entry, FIELDS, Identity
 use assistant_core::model::{Confidence, Role};
 use assistant_core::results::ReviewBook;
 
+use crate::format::shown_cover_date;
 use crate::i18n::{gettext, gettext_f};
 use crate::photos;
 
@@ -57,6 +58,14 @@ fn role_label(role: Role) -> String {
         Role::Article => "Article",
         Role::Interview => "Interview",
     })
+}
+
+/// A value as the review page shows it.
+pub fn shown_value(key: &str, text: &str) -> String {
+    match key {
+        "cover_date" => shown_cover_date(text),
+        _ => text.to_owned(),
+    }
 }
 
 fn confidence_label(c: Confidence) -> String {
@@ -170,7 +179,7 @@ fn value_row(
             label,
             &format!(
                 "{}\n{}",
-                value.text,
+                shown_value(key, &value.text),
                 provenance(value.source, sources, value.confidence, &value.note)
             ),
             value.accepted,
