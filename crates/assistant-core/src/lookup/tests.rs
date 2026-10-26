@@ -145,6 +145,7 @@ fn run(provider: &Scripted, line: &str) -> (Result<Draft, LookupError>, Spent) {
     let mut spent = Spent::default();
     let result = look_up(
         provider,
+        None,
         &query(line),
         &Settings::balanced(YEAR),
         &AtomicBool::new(false),
@@ -592,6 +593,7 @@ fn run_covers(provider: &Scripted, back: bool) -> (Result<Draft, LookupError>, S
     let mut spent = Spent::default();
     let result = look_up_covers(
         provider,
+        None,
         &covers(back),
         &Settings::balanced(YEAR),
         &AtomicBool::new(false),
@@ -800,6 +802,7 @@ fn a_series_the_owner_chose_is_looked_up_with_the_covers() {
     covers.chosen = Some(query("Robot Tales (1960) Vol. 2 #1"));
     let draft = look_up_covers(
         &provider,
+        None,
         &covers,
         &Settings::balanced(YEAR),
         &AtomicBool::new(false),
@@ -1457,4 +1460,143 @@ fn an_editor_waits_for_the_owner() {
         .map(|c| (c.name.as_str(), c.accepted))
         .collect();
     assert_eq!(held, [("Ada Sprocket", true), ("Rex Rivet", false)]);
+}
+
+/// A catalogue copy that has one record of the robot comic, and says
+/// what it was asked.
+#[derive(Default)]
+struct Catalogue {
+    asked: std::sync::Mutex<Vec<(BookQuery, Option<String>)>>,
+}
+
+const RECORD: &str = "Series: The Astonishing Robot Tales (1954\u{2013}1956), Atomic Age\n\
+Issue: #1\n\
+Edition Direct (the issue itself): price 0.10 USD; 36 pages\n\
+Story 1 (comic story) \u{201c}The Robot Who Read Comics\u{201d}: script: Ada Sprocket";
+
+impl Catalog for Catalogue {
+    fn records(&self, query: &BookQuery, barcode: Option<&Barcode>) -> Vec<CatalogRecord> {
+        self.asked
+            .lock()
+            .unwrap()
+            .push((query.clone(), barcode.map(|b| b.as_str().to_owned())));
+        if !query.series.to_lowercase().contains("robot") {
+            return Vec::new();
+        }
+        vec![CatalogRecord {
+            title: "Grand Comics Database (your copy, dated 2026-10-16): \
+                    The Astonishing Robot Tales (1954) #1"
+                .into(),
+            text: format!("{RECORD}\u{202e}\n\n"),
+        }]
+    }
+}
+
+fn run_catalogued(
+    provider: &Scripted,
+    catalogue: &Catalogue,
+    line: &str,
+) -> Result<Draft, LookupError> {
+    look_up(
+        provider,
+        Some(catalogue),
+        &query(line),
+        &Settings::balanced(YEAR),
+        &AtomicBool::new(false),
+        &mut Spent::default(),
+    )
+}
+
+#[test]
+fn the_owner_s_catalogue_copy_is_asked_first_and_cited_like_a_page() {
+    // Its title is cited from the record, which follows the research's
+    // two pages as source 3.
+    let mut answer = full_answer();
+    answer["fields"]["story_title"] = value("The Robot Who Read Comics", 3, "high");
+    let provider = Scripted::new(vec![researched(2), answered(answer), no_problems()]);
+    let catalogue = Catalogue::default();
+    let draft = run_catalogued(&provider, &catalogue, "Astonishing Robot Tales (1954) #1").unwrap();
+    let research = &provider.research_asked.borrow()[0];
+    assert!(
+        research.system.contains("marked [GCD 1]"),
+        "{}",
+        research.system
+    );
+    assert!(
+        research
+            .user
+            .contains("[GCD 1] Grand Comics Database (your copy")
+    );
+    assert!(research.user.contains("script: Ada Sprocket"));
+    let record = &draft.sources[2];
+    assert_eq!(record.url, CATALOG_COPY);
+    // Cleaned as text from outside is, its lines kept.
+    assert_eq!(record.cited_text, RECORD);
+    let title = draft.value("story_title").unwrap();
+    assert_eq!(title.source, Some(2));
+    assert!(title.accepted);
+    let asked = provider.answers_asked.borrow();
+    assert!(asked[0].user.contains("which the notes call [GCD 1]"));
+    // The check is shown the record once, however many values cite it.
+    assert!(
+        asked[1]
+            .user
+            .contains("source [3]: the owner's catalogue record")
+    );
+    assert_eq!(asked[1].user.matches("script: Ada Sprocket").count(), 1);
+}
+
+#[test]
+fn a_book_found_in_the_catalogue_copy_needs_no_cited_page() {
+    let mut answer = full_answer();
+    answer["fields"]["series"] = value("Astonishing Robot Tales", 1, "high");
+    let provider = Scripted::new(vec![researched(0), answered(answer), no_problems()]);
+    let draft = run_catalogued(
+        &provider,
+        &Catalogue::default(),
+        "Astonishing Robot Tales (1954) #1",
+    )
+    .unwrap();
+    assert_eq!(draft.identity, Identity::Identified);
+    assert_eq!(draft.sources[0].url, CATALOG_COPY);
+    assert!(draft.value("series").unwrap().accepted);
+}
+
+#[test]
+fn without_a_record_the_lookup_goes_on_as_before() {
+    let provider = Scripted::new(vec![researched(2), answered(full_answer()), no_problems()]);
+    let catalogue = Catalogue::default();
+    let draft = run_catalogued(&provider, &catalogue, "Pretend Tales (1975) #12").unwrap();
+    let research = &provider.research_asked.borrow()[0];
+    assert!(!research.system.contains("[GCD 1] and so on, the likeliest"));
+    assert!(
+        !research
+            .user
+            .contains("Grand Comics Database has these records")
+    );
+    assert!(draft.sources.iter().all(|s| s.url != CATALOG_COPY));
+    assert_eq!(catalogue.asked.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn the_cover_s_barcode_is_given_to_the_catalogue_copy() {
+    let provider = Scripted::new(vec![
+        answered(robot_cover()),
+        researched(2),
+        answered(photo_structured(&[])),
+        no_problems(),
+    ]);
+    let catalogue = Catalogue::default();
+    look_up_covers(
+        &provider,
+        Some(&catalogue),
+        &covers(false),
+        &Settings::balanced(YEAR),
+        &AtomicBool::new(false),
+        &mut Spent::default(),
+    )
+    .unwrap();
+    let asked = catalogue.asked.lock().unwrap();
+    assert_eq!(asked[0].0.series, "Astonishing Robot Tales");
+    assert_eq!(asked[0].1.as_deref(), Some("75960608936900111"));
 }

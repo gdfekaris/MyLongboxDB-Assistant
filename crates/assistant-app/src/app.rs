@@ -682,7 +682,7 @@ impl App {
                         api: Anthropic::new(&client, &key),
                         model,
                     };
-                    queue::run(&provider, &queries, &options, &cancel, &emit)
+                    queue::run(&provider, None, &queries, &options, &cancel, &emit)
                 }
                 ProviderChoice::OpenRouter => {
                     // Prices are not needed: OpenRouter reports what each
@@ -701,7 +701,7 @@ impl App {
                             web_search_price: None,
                         },
                     };
-                    queue::run(&provider, &queries, &options, &cancel, &emit)
+                    queue::run(&provider, None, &queries, &options, &cancel, &emit)
                 }
             };
             if let Ok(summary) = summary {

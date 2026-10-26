@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::lines::BookQuery;
 use crate::lookup::{
-    Covers, Draft, LookupError, Provider, Settings, Spent, look_up, look_up_covers,
+    Catalog, Covers, Draft, LookupError, Provider, Settings, Spent, look_up, look_up_covers,
 };
 use crate::money::Picodollars;
 
@@ -103,11 +103,13 @@ struct Shared {
     set_aside: i64,
 }
 
-/// Looks up `items` and reports each book's progress through `event`,
-/// from whichever thread looked it up. Returns once every book has
-/// finished or been skipped.
+/// Looks up `items`, asking `catalog` first where the owner has one,
+/// and reports each book's progress through `event`, from whichever
+/// thread looked it up. Returns once every book has finished or been
+/// skipped.
 pub fn run(
     provider: &(dyn Provider + Sync),
+    catalog: Option<&dyn Catalog>,
     items: &[Item],
     options: &RunOptions,
     cancel: &AtomicBool,
@@ -161,12 +163,22 @@ pub fn run(
                     event(Event::Started(index));
                     let mut spent = Spent::default();
                     let result = match &items[index] {
-                        Item::Line(query) => {
-                            look_up(provider, query, &options.settings, cancel, &mut spent)
-                        }
-                        Item::Covers(covers) => {
-                            look_up_covers(provider, covers, &options.settings, cancel, &mut spent)
-                        }
+                        Item::Line(query) => look_up(
+                            provider,
+                            catalog,
+                            query,
+                            &options.settings,
+                            cancel,
+                            &mut spent,
+                        ),
+                        Item::Covers(covers) => look_up_covers(
+                            provider,
+                            catalog,
+                            covers,
+                            &options.settings,
+                            cancel,
+                            &mut spent,
+                        ),
                     };
                     {
                         let mut s = shared.lock().unwrap_or_else(|e| e.into_inner());
@@ -266,7 +278,7 @@ mod tests {
         cancel: &AtomicBool,
     ) -> (Result<Summary, RunError>, Vec<String>) {
         let log = Mutex::new(Vec::new());
-        let result = run(provider, queries, options, cancel, &|e| {
+        let result = run(provider, None, queries, options, cancel, &|e| {
             let line = match e {
                 Event::Started(i) => format!("started {i}"),
                 Event::Finished { index, result, .. } => {
@@ -396,6 +408,7 @@ mod tests {
         };
         let summary = run(
             &Refusing,
+            None,
             &books(5),
             &options,
             &AtomicBool::new(false),

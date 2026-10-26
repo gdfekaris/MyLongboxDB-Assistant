@@ -3,7 +3,9 @@
 //!
 //! 0. Read, for photos: the model reports what the covers print, and
 //!    that becomes the book to look up and sources the later steps can
-//!    cite.
+//!    cite. Then the owner's own copy of the Grand Comics Database, if
+//!    they added one, is asked for the issue's records, which become
+//!    sources too.
 //! 1. Research: with web search, find which issue it is and what reliable
 //!    pages say about it. The provider reports which pages were cited.
 //! 2. Structure: without tools, turn the notes into the fields under a
@@ -32,6 +34,7 @@ pub use fields::{FIELDS, Field, Kind, check, spec};
 pub use prompts::PROMPT_VERSION;
 pub use read::{COVER_PHOTO, Reading, Seen};
 
+use crate::codes::Barcode;
 use crate::cost::{Estimate, Planned, Price, Usage, image_tokens};
 use crate::lines::BookQuery;
 use crate::model::{Category, Confidence, Jpeg, Role};
@@ -269,6 +272,83 @@ pub trait Provider {
     fn answer(&self, request: &SchemaRequest, cancel: &AtomicBool) -> Reply<String>;
 }
 
+/// What the owner's own copy of a catalogue records of an issue,
+/// written out for the lookup.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CatalogRecord {
+    /// Which catalogue and issue, such as Grand Comics Database (your
+    /// copy, dated 2026-10-16): The Amazing Spider-Man (1963) #300.
+    pub title: String,
+    pub text: String,
+}
+
+/// The owner's own copy of a catalogue, the Grand Comics Database's,
+/// asked before the web. Lookups run on several threads at once.
+pub trait Catalog: Sync {
+    /// The records of the issue `query` names, or whose edition carries
+    /// `barcode`, the likeliest first; none where the copy has none.
+    fn records(&self, query: &BookQuery, barcode: Option<&Barcode>) -> Vec<CatalogRecord>;
+}
+
+/// The address given to sources from the owner's catalogue copy. It has
+/// a space, so no web page's address can be the same.
+pub const CATALOG_COPY: &str = "catalogue copy";
+
+/// The most records a lookup takes from the catalogue copy, and the
+/// longest each may be.
+const MAX_RECORDS: usize = 3;
+const MAX_RECORD: usize = 6_000;
+
+/// The catalogue copy's records of the book, cleaned and capped as any
+/// text from outside is.
+fn catalogued(
+    catalog: Option<&dyn Catalog>,
+    query: &BookQuery,
+    reading: Option<&Reading>,
+) -> Vec<Source> {
+    let Some(catalog) = catalog else {
+        return Vec::new();
+    };
+    let barcode = reading.and_then(Reading::barcode);
+    catalog
+        .records(query, barcode.as_ref())
+        .into_iter()
+        .take(MAX_RECORDS)
+        .map(|r| Source {
+            url: CATALOG_COPY.into(),
+            title: clean(&r.title, MAX_TITLE),
+            cited_text: r
+                .text
+                .lines()
+                .map(|line| clean(line, MAX_RECORD))
+                .filter(|line| !line.is_empty())
+                .collect::<Vec<_>>()
+                .join("\n")
+                .chars()
+                .take(MAX_RECORD)
+                .collect(),
+        })
+        .collect()
+}
+
+/// The catalogue copy's records, for the research to start from.
+fn records_for_research(records: &[Source]) -> String {
+    if records.is_empty() {
+        return String::new();
+    }
+    let mut text =
+        String::from("\nThe owner's copy of the Grand Comics Database has these records:\n");
+    for (n, r) in records.iter().enumerate() {
+        text.push_str(&format!(
+            "[GCD {}] {}\n<<<\n{}\n>>>\n",
+            n + 1,
+            r.title,
+            r.cited_text
+        ));
+    }
+    text
+}
+
 /// Why a lookup produced nothing to review.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LookupError {
@@ -367,7 +447,18 @@ fn trusted(source: &Source, confidence: Confidence) -> bool {
 /// The research notes and numbered sources, for the later steps.
 fn notes(research: &Research) -> String {
     let mut text = format!("Research notes:\n<<<\n{}\n>>>\n\nSources:\n", research.text);
+    let mut records = 0;
     for (n, source) in research.sources.iter().enumerate() {
+        if source.url == CATALOG_COPY {
+            records += 1;
+            text.push_str(&format!(
+                "[{}] {}, the owner's own copy, which the notes call [GCD {records}]\n    shows:\n<<<\n{}\n>>>\n",
+                n + 1,
+                source.title,
+                source.cited_text
+            ));
+            continue;
+        }
         if source.url == KNOWLEDGE {
             text.push_str(&format!(
                 "[{}] Your own knowledge, for what the notes mark [knowledge]\n",
@@ -621,6 +712,13 @@ fn checked_values(draft: &Draft) -> String {
         Some(i) if draft.sources[i].url == KNOWLEDGE => {
             format!("source [{}]: the model's own knowledge, no page", i + 1)
         }
+        // A record runs to pages: it is shown once, with the sources.
+        Some(i) if draft.sources[i].url == CATALOG_COPY => {
+            format!(
+                "source [{}]: the owner's catalogue record, shown below",
+                i + 1
+            )
+        }
         Some(i) => format!("source [{}]: \"{}\"", i + 1, draft.sources[i].cited_text),
         None => "no source".into(),
     };
@@ -725,12 +823,13 @@ fn effort_note(failure: &Failure) -> String {
 /// added to `spent`, even when the lookup fails.
 pub fn look_up(
     provider: &dyn Provider,
+    catalog: Option<&dyn Catalog>,
     query: &BookQuery,
     settings: &Settings,
     cancel: &AtomicBool,
     spent: &mut Spent,
 ) -> Result<Draft, LookupError> {
-    look_up_from(provider, query, None, None, settings, cancel, spent)
+    look_up_from(provider, catalog, query, None, settings, cancel, spent)
 }
 
 /// The owner's photos of one book: the front cover, and the back if they
@@ -751,6 +850,7 @@ pub struct Covers {
 /// added to `spent`, even when the lookup fails.
 pub fn look_up_covers(
     provider: &dyn Provider,
+    catalog: Option<&dyn Catalog>,
     covers: &Covers,
     settings: &Settings,
     cancel: &AtomicBool,
@@ -789,9 +889,9 @@ pub fn look_up_covers(
     }
     let mut draft = look_up_from(
         provider,
+        catalog,
         &query,
-        Some(&reading),
-        Some(&covers.front),
+        Some((&reading, &covers.front)),
         settings,
         cancel,
         spent,
@@ -1149,34 +1249,45 @@ fn known_names(draft: &mut Draft) {
     }
 }
 
-/// The steps after reading: research, structure, check. `reading` is
-/// what the covers showed, for a photo lookup.
+/// The steps after reading: research, structure, check. `photo` is what
+/// the covers showed and the front cover, for a photo lookup.
 fn look_up_from(
     provider: &dyn Provider,
+    catalog: Option<&dyn Catalog>,
     query: &BookQuery,
-    reading: Option<&Reading>,
-    front: Option<&Jpeg>,
+    photo: Option<(&Reading, &Jpeg)>,
     settings: &Settings,
     cancel: &AtomicBool,
     spent: &mut Spent,
 ) -> Result<Draft, LookupError> {
+    let (reading, front) = (photo.map(|p| p.0), photo.map(|p| p.1));
     let from_text = reading.is_none();
     let (edition, cover) = match reading {
         None => (prompts::TEXT_EDITION, String::new()),
         Some(r) => (prompts::PHOTO_EDITION, format!("\n{}", r.describe())),
     };
+    let records = catalogued(catalog, query, reading);
+    let catalogue_rule = if records.is_empty() {
+        ""
+    } else {
+        prompts::CATALOGUE
+    };
     let research = reply(
         provider.research(
             &ResearchRequest {
                 system: format!(
-                    "{}{}{}{}and its credits, characters, teams, and story arcs, each with the page that says so or marked [knowledge].\n",
+                    "{}{catalogue_rule}{}{}{}and its credits, characters, teams, and story arcs, each with the page that says so, marked [knowledge], or marked [GCD 1] and so on.\n",
                     prompts::RESEARCH,
                     edition,
                     prompts::REPORT,
                     prompts::field_list(from_text)
                 ),
                 images: front.into_iter().cloned().collect(),
-                user: format!("{}{cover}", describe(query, reading)),
+                user: format!(
+                    "{}{cover}{}",
+                    describe(query, reading),
+                    records_for_research(&records)
+                ),
                 max_searches: settings.max_searches,
                 max_pages: settings.max_pages,
                 effort: settings.effort,
@@ -1187,7 +1298,7 @@ fn look_up_from(
         spent,
     )?;
     let research = cleaned(research);
-    if research.sources.is_empty() {
+    if research.sources.is_empty() && records.is_empty() {
         return Ok(Draft {
             query: query.clone(),
             identity: Identity::NoSources,
@@ -1204,12 +1315,13 @@ fn look_up_from(
         return Err(LookupError::Failed(Failure::Cancelled));
     }
     // The research's pages keep the first numbers, which its notes mark
-    // their passages with; the covers' items follow, then the model's own
-    // knowledge.
+    // their passages with; the catalogue copy's records follow, then the
+    // covers' items, then the model's own knowledge.
     let research = Research {
         sources: research
             .sources
             .into_iter()
+            .chain(records)
             .chain(reading.map(Reading::sources).unwrap_or_default())
             .chain(std::iter::once(knowledge()))
             .collect(),
