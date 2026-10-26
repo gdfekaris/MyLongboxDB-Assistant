@@ -37,6 +37,8 @@ pub enum List {
 pub enum ReviewMsg {
     Open(usize),
     Include(usize, bool),
+    /// The owner has looked the book over, or wants to again.
+    Reviewed(usize, bool),
     AcceptValue(usize, &'static str, bool),
     AcceptEntry(usize, List, usize, bool),
     Edit(usize, &'static str),
@@ -334,6 +336,21 @@ fn book_content(index: usize, book: &ReviewBook, emit: &Emit) -> gtk::Box {
         include.connect_active_notify(move |r| emit(ReviewMsg::Include(index, r.is_active())));
         top.add(&include);
     }
+    let reviewed = gtk::CheckButton::builder()
+        .active(book.reviewed)
+        .valign(gtk::Align::Center)
+        .build();
+    let reviewed_row = adw::ActionRow::builder()
+        .title(gettext("Reviewed"))
+        .subtitle(gettext("Tick once you have looked this book over"))
+        .activatable_widget(&reviewed)
+        .build();
+    reviewed_row.add_prefix(&reviewed);
+    {
+        let emit = emit.clone();
+        reviewed.connect_toggled(move |c| emit(ReviewMsg::Reviewed(index, c.is_active())));
+    }
+    top.add(&reviewed_row);
     let discard = adw::ButtonRow::builder()
         .title(gettext("Discard This Book"))
         .css_classes(["destructive-action"])
@@ -636,23 +653,37 @@ impl ReviewPage {
                 include.connect_toggled(move |c| emit(ReviewMsg::Include(index, c.is_active())));
                 row.add_prefix(&include);
             }
+            if book.reviewed {
+                row.add_suffix(
+                    &gtk::Label::builder()
+                        .label(gettext("Reviewed"))
+                        .valign(gtk::Align::Center)
+                        .css_classes(["caption-heading", "success"])
+                        .build(),
+                );
+            }
             row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
             let emit = self.emit.clone();
             row.connect_activated(move |_| emit(ReviewMsg::Open(index)));
             self.list.append(&row);
         }
         let included = books.iter().filter(|b| b.included).count();
+        let reviewed = books.iter().filter(|b| b.reviewed).count();
         let summary = if books.len() == 1 {
             gettext_f(
-                "1 looked-up book, {included} included in the export.",
-                &[("included", &included.to_string())],
+                "1 looked-up book, {included} included in the export, {reviewed} reviewed.",
+                &[
+                    ("included", &included.to_string()),
+                    ("reviewed", &reviewed.to_string()),
+                ],
             )
         } else {
             gettext_f(
-                "{count} looked-up books, {included} included in the export.",
+                "{count} looked-up books, {included} included in the export, {reviewed} reviewed.",
                 &[
                     ("count", &books.len().to_string()),
                     ("included", &included.to_string()),
+                    ("reviewed", &reviewed.to_string()),
                 ],
             )
         };

@@ -272,6 +272,25 @@ fn results_from_before_photos_were_kept_still_read() {
 }
 
 #[test]
+fn a_book_marked_reviewed_stays_marked() {
+    let mut books = books();
+    assert!(!books[0].reviewed);
+    books[0].reviewed = true;
+    let read = from_json(&to_json(&books), YEAR).unwrap();
+    assert!(read[0].reviewed);
+    assert!(!read[1].reviewed);
+}
+
+#[test]
+fn results_from_before_books_were_marked_reviewed_still_read() {
+    let mut file: Json = serde_json::from_str(&to_json(&books())).unwrap();
+    for b in file["books"].as_array_mut().unwrap() {
+        b.as_object_mut().unwrap().remove("reviewed");
+    }
+    assert_eq!(from_json(&file.to_string(), YEAR).unwrap(), books());
+}
+
+#[test]
 fn the_owner_s_own_values_are_checked_and_accepted() {
     let mut d = draft();
     d.set_value("cover_price", "$0.10", YEAR).unwrap();

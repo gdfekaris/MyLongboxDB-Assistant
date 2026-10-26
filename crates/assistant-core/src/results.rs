@@ -1,6 +1,7 @@
 //! Looked-up books kept until they are exported, as they cost money to
-//! look up again. The file holds each book's draft and whether it is
-//! included, as JSON, never a key. It is read back as strictly as a
+//! look up again. The file holds each book's draft, whether it is
+//! included, and whether the owner has reviewed it, as JSON, never a
+//! key. It is read back as strictly as a
 //! model's answer: every value is checked again by its field's rules, so
 //! a damaged or altered file cannot put into an export what a lookup
 //! could not. The owner's photos of each book are kept beside it, one
@@ -50,12 +51,15 @@ impl Photo {
     }
 }
 
-/// A looked-up book, the owner's photos of it, and whether the owner
-/// includes it in the export.
+/// A looked-up book, the owner's photos of it, whether the owner
+/// includes it in the export, and whether they have reviewed it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ReviewBook {
     pub draft: Draft,
     pub included: bool,
+    /// Marked by the owner once they have looked the book over, to keep
+    /// track of a long review; the export does not depend on it.
+    pub reviewed: bool,
     pub front: Option<Photo>,
     pub back: Option<Photo>,
 }
@@ -67,6 +71,7 @@ impl ReviewBook {
         Self {
             draft,
             included,
+            reviewed: false,
             front: None,
             back: None,
         }
@@ -102,6 +107,9 @@ struct File {
 #[serde(deny_unknown_fields)]
 struct Saved {
     included: bool,
+    /// Files from before books could be marked reviewed have none.
+    #[serde(default)]
+    reviewed: bool,
     /// The names the book's photos are kept by; files from before photos
     /// were kept have none.
     #[serde(default)]
@@ -216,6 +224,7 @@ pub fn to_json(books: &[ReviewBook]) -> String {
             };
             Saved {
                 included: b.included,
+                reviewed: b.reviewed,
                 front: b.front.as_ref().map(|p| p.name.clone()),
                 back: b.back.as_ref().map(|p| p.name.clone()),
                 line: d.query.line,
@@ -385,6 +394,7 @@ fn book(saved: Saved, this_year: u16, photo: &dyn Fn(&str) -> Option<Photo>) -> 
             research: clean(&saved.research),
         },
         included,
+        reviewed: saved.reviewed,
         front: saved.front.as_deref().and_then(photo),
         back: saved.back.as_deref().and_then(photo),
     })

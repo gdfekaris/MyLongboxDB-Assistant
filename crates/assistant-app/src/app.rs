@@ -371,6 +371,12 @@ impl App {
                     self.save_results();
                 }
             }
+            ReviewMsg::Reviewed(i, on) => {
+                if let Some(book) = self.results.get_mut(i) {
+                    book.reviewed = on;
+                    self.save_results();
+                }
+            }
             ReviewMsg::AcceptValue(i, key, on) => {
                 let value = self
                     .results
