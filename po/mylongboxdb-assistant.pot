@@ -9,7 +9,7 @@ msgstr ""
 "Project-Id-Version: mylongboxdb-assistant\n"
 "Report-Msgid-Bugs-To: https://github.com/gdfekaris/MyLongboxDB-Assistant/"
 "issues\n"
-"POT-Creation-Date: 2026-10-26 20:14-0700\n"
+"POT-Creation-Date: 2026-10-27 16:37-0700\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -55,8 +55,8 @@ msgstr ""
 
 #: crates/assistant-app/src/add.rs:102
 msgid ""
-"Add photos of your books' front covers, one book a photo. If you took a "
-"book's back cover too, add it to that book."
+"Add or drag in photos of your books' front covers, one book a photo. If you "
+"took a book's back cover too, add it or drop it on that book."
 msgstr ""
 
 #: crates/assistant-app/src/add.rs:109
@@ -67,7 +67,7 @@ msgstr ""
 msgid "Typed"
 msgstr ""
 
-#: crates/assistant-app/src/add.rs:132 crates/assistant-app/src/add.rs:241
+#: crates/assistant-app/src/add.rs:132 crates/assistant-app/src/add.rs:243
 msgid "Photos"
 msgstr ""
 
@@ -83,90 +83,90 @@ msgstr ""
 msgid "_Look Up…"
 msgstr ""
 
-#: crates/assistant-app/src/add.rs:258
+#: crates/assistant-app/src/add.rs:260
 msgid "Add Photos"
 msgstr ""
 
-#: crates/assistant-app/src/add.rs:259
+#: crates/assistant-app/src/add.rs:261
 msgid "Add Back Cover"
 msgstr ""
 
-#: crates/assistant-app/src/add.rs:296
+#: crates/assistant-app/src/add.rs:359
 msgid "photo"
 msgstr ""
 
-#: crates/assistant-app/src/add.rs:304 crates/assistant-app/src/add.rs:367
-#: crates/assistant-app/src/add.rs:399 crates/assistant-app/src/photos.rs:100
+#: crates/assistant-app/src/add.rs:367 crates/assistant-app/src/add.rs:430
+#: crates/assistant-app/src/add.rs:462 crates/assistant-app/src/photos.rs:100
 msgid "the photo could not be read"
 msgstr ""
 
-#: crates/assistant-app/src/add.rs:305
+#: crates/assistant-app/src/add.rs:368
 msgid "the photo could not be opened"
 msgstr ""
 
-#: crates/assistant-app/src/add.rs:355 crates/assistant-app/src/add.rs:486
+#: crates/assistant-app/src/add.rs:418 crates/assistant-app/src/add.rs:558
 msgid "Edit Back Cover"
 msgstr ""
 
-#: crates/assistant-app/src/add.rs:357 crates/assistant-app/src/add.rs:488
+#: crates/assistant-app/src/add.rs:420 crates/assistant-app/src/add.rs:560
 msgid "Edit Front Cover"
 msgstr ""
 
-#: crates/assistant-app/src/add.rs:464
+#: crates/assistant-app/src/add.rs:536
 #, rust-format
 msgid "Back cover: {name}"
 msgstr ""
 
-#: crates/assistant-app/src/add.rs:465
+#: crates/assistant-app/src/add.rs:537
 msgid "Front cover only"
 msgstr ""
 
-#: crates/assistant-app/src/add.rs:529
+#: crates/assistant-app/src/add.rs:604
 msgid "Swap Front and Back"
 msgstr ""
 
-#: crates/assistant-app/src/add.rs:540
+#: crates/assistant-app/src/add.rs:615
 msgid "Remove Back Cover"
 msgstr ""
 
-#: crates/assistant-app/src/add.rs:554
+#: crates/assistant-app/src/add.rs:629
 msgid "Use as Back of the Book Above"
 msgstr ""
 
-#: crates/assistant-app/src/add.rs:564
+#: crates/assistant-app/src/add.rs:639
 msgid "Add Back Cover…"
 msgstr ""
 
-#: crates/assistant-app/src/add.rs:568
+#: crates/assistant-app/src/add.rs:643
 msgid "Remove Book"
 msgstr ""
 
-#: crates/assistant-app/src/add.rs:588
+#: crates/assistant-app/src/add.rs:663
 #, rust-format
 msgid "Line {line}: {text}"
 msgstr ""
 
-#: crates/assistant-app/src/add.rs:612
+#: crates/assistant-app/src/add.rs:687
 msgid "Fix or remove the lines that could not be read."
 msgstr ""
 
-#: crates/assistant-app/src/add.rs:618
+#: crates/assistant-app/src/add.rs:693
 #, rust-format
 msgid "Reading photos: {count} to go…"
 msgstr ""
 
-#: crates/assistant-app/src/add.rs:626
+#: crates/assistant-app/src/add.rs:701
 #, rust-format
 msgid ""
 "{count} books is more than a run may hold ({batch}). Split them up, or raise "
 "Books per run."
 msgstr ""
 
-#: crates/assistant-app/src/add.rs:635
+#: crates/assistant-app/src/add.rs:710
 msgid "1 book to look up"
 msgstr ""
 
-#: crates/assistant-app/src/add.rs:638
+#: crates/assistant-app/src/add.rs:713
 #, rust-format
 msgid "{count} books to look up"
 msgstr ""
@@ -757,6 +757,18 @@ msgstr ""
 #: crates/assistant-app/src/photos.rs:152
 #, rust-format
 msgid "{name} was not added: {why}"
+msgstr ""
+
+#: crates/assistant-app/src/photos.rs:199
+msgid "only files on this computer can be added; save the photo first"
+msgstr ""
+
+#: crates/assistant-app/src/photos.rs:204
+msgid "only JPEG, PNG, WebP, and HEIC photos can be added"
+msgstr ""
+
+#: crates/assistant-app/src/photos.rs:214
+msgid "A book's back cover is one photo; drop the photos one at a time."
 msgstr ""
 
 #: crates/assistant-app/src/review.rs:66
