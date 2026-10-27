@@ -1237,6 +1237,13 @@ fn characters_go_by_the_names_they_are_known_by() {
     );
     assert_eq!(draft.characters[0].detail, Detail::FirstAppearance(true));
     assert_eq!(names(&draft.teams), ["Robot Rangers"]);
+    // Each waits for the owner to choose, with nothing said about why.
+    assert!(
+        draft
+            .characters
+            .iter()
+            .all(|c| !c.accepted && c.note.is_empty())
+    );
 }
 
 #[test]

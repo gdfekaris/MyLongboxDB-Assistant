@@ -1539,11 +1539,10 @@ fn judgments(draft: &mut Draft) {
             }
         }
     }
+    // Which characters to keep is the owner's choice every time, so each
+    // waits for them; a note saying so on every one would only be noise.
     for character in &mut draft.characters {
         character.accepted = false;
-        if character.note.is_empty() {
-            character.note = "keep the characters the issue is known for".into();
-        }
     }
     let number = draft.query.number.as_str();
     if number.contains(['/', '½']) || number == "0" {
