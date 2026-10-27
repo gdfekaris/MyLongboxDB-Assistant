@@ -16,7 +16,9 @@
       cover photo or a series and issue number, using a Claude model from
       Anthropic with your own API key. You review every field it found
       before anything is saved, and the results are written as a
-      MyLongboxDB full export for you to import.
+      MyLongboxDB full export for you to import. If you add your own copy
+      of the Grand Comics Database's data, lookups check it before they
+      search the web.
     </p>
     <p>
       The Assistant never opens your MyLongboxDB collection, connects only
@@ -37,6 +39,18 @@
   </branding>
 
   <releases>
+    <release version="0.2.0" date="2026-10-26">
+      <description>
+        <p>Your own copy of the Grand Comics Database, grades for your copies, and an easier review.</p>
+        <ul>
+          <li>Add your own copy of the Grand Comics Database's data dump, and lookups check it before they search the web</li>
+          <li>Give each copy its grade, who graded it, and a grading company's certificate number, as MyLongboxDB takes them</li>
+          <li>Mark each book reviewed, see how sure the lookup is beside every value, and edit an issue's notes as a whole paragraph</li>
+          <li>A series' volume goes into the export only when you tick it, so two issues of one series no longer import as two series</li>
+          <li>An About window shows the version you are running</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-10-26">
       <description>
         <p>The first release: look up comic books from cover photos or typed lines, review them, and export them for MyLongboxDB.</p>
