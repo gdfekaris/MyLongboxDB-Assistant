@@ -98,6 +98,9 @@ fn the_record_says_what_the_lookup_needs() {
     ] {
         assert!(text.contains(said), "{said}\n\n{text}");
     }
+    // The catalogue's count of the series' issues takes in its specials,
+    // so it is not given as the run's length.
+    assert!(!text.contains("24 issues"), "{text}");
     // Ads and deleted credits are not in it.
     assert!(!text.contains("Sea-Monkeys"), "{text}");
     assert!(!text.contains("inks: Ada Sprocket"), "{text}");

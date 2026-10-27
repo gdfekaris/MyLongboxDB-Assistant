@@ -343,9 +343,8 @@ fn record(
     matched: Option<i64>,
     max: usize,
 ) -> rusqlite::Result<Option<Record>> {
-    type IssueRow = (
+    type SeriesRow = (
         String,
-        Option<i64>,
         Option<i64>,
         Option<i64>,
         Option<String>,
@@ -353,10 +352,12 @@ fn record(
         Option<String>,
         Option<String>,
     );
-    let series: Option<IssueRow> = conn
+    // The catalogue's count of a series' issues takes in its specials,
+    // such as a #0, so it is not the run's length and is not given.
+    let series: Option<SeriesRow> = conn
         .query_row(
-            "SELECT s.name, s.year_began, s.year_ended, s.issue_count, s.publisher, s.country,
-                    s.language, s.format
+            "SELECT s.name, s.year_began, s.year_ended, s.publisher, s.country, s.language,
+                    s.format
              FROM issue i JOIN series s ON s.id = i.series_id WHERE i.id = ?1",
             [id],
             |r| {
@@ -368,12 +369,11 @@ fn record(
                     r.get(4)?,
                     r.get(5)?,
                     r.get(6)?,
-                    r.get(7)?,
                 ))
             },
         )
         .optional()?;
-    let Some((name, began, ended, count, publisher, country, language, format)) = series else {
+    let Some((name, began, ended, publisher, country, language, format)) = series else {
         return Ok(None);
     };
     let mut text = String::new();
@@ -388,9 +388,6 @@ fn record(
     let place: Vec<String> = [country, language].into_iter().flatten().collect();
     if !place.is_empty() {
         let _ = write!(text, ", {}", place.join("/"));
-    }
-    if let Some(count) = count {
-        let _ = write!(text, ", {count} issues");
     }
     text.push('\n');
 
