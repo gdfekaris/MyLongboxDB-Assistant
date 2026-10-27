@@ -158,78 +158,116 @@ pub fn not_added(name: &str, why: &str) -> String {
 /// offers them.
 pub const SUFFIXES: [&str; 6] = ["jpg", "jpeg", "png", "webp", "heic", "heif"];
 
-/// Of the files dropped on the page, by name and whether each is a file
-/// on this computer: the places of those to read, and a line for each
-/// refused. A photo dragged from a web page can arrive as its address
-/// alone, and the app never downloads anything, so it must be saved
-/// first. `one_only` is for a book's back, which takes a single photo.
-pub fn dropped(files: &[(String, bool)], one_only: bool) -> (Vec<usize>, Vec<String>) {
-    let mut taken = Vec::new();
-    let mut refused = Vec::new();
-    for (n, (name, local)) in files.iter().enumerate() {
+/// Where a dropped file is, as the app can reach it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Reach {
+    /// A file the app can open.
+    File,
+    /// A path on this computer that was not shared into the app's
+    /// sandbox, as a file manager that offers only paths gives.
+    Unshared,
+    /// Not a file on this computer at all, such as a web address.
+    Elsewhere,
+}
+
+/// What to do with the files dropped on the page, by their places.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Dropped {
+    /// Photos the app can read.
+    pub read: Vec<usize>,
+    /// Photos on this computer that were not shared into the app's
+    /// sandbox, to be picked with the file chooser, which can share them.
+    pub ask: Vec<usize>,
+    /// A line for each file refused.
+    pub refused: Vec<String>,
+}
+
+/// Sorts the files dropped on the page, by name and where each is. A
+/// photo dragged from a web page can arrive as its address alone, and the
+/// app never downloads anything, so it must be saved first. `one_only` is
+/// for a book's back, which takes a single photo.
+pub fn dropped(files: &[(String, Reach)], one_only: bool) -> Dropped {
+    let mut sorted = Dropped::default();
+    for (n, (name, reach)) in files.iter().enumerate() {
         let suffix = name
             .rsplit_once('.')
             .map(|(_, s)| s.to_ascii_lowercase())
             .unwrap_or_default();
-        if !local {
-            refused.push(not_added(
+        if *reach == Reach::Elsewhere {
+            sorted.refused.push(not_added(
                 name,
                 &gettext("only files on this computer can be added; save the photo first"),
             ));
         } else if !SUFFIXES.contains(&suffix.as_str()) {
-            refused.push(not_added(
+            sorted.refused.push(not_added(
                 name,
                 &gettext("only JPEG, PNG, WebP, and HEIC photos can be added"),
             ));
+        } else if *reach == Reach::Unshared {
+            sorted.ask.push(n);
         } else {
-            taken.push(n);
+            sorted.read.push(n);
         }
     }
-    if one_only && taken.len() > 1 {
-        refused.push(gettext(
+    if one_only && sorted.read.len() + sorted.ask.len() > 1 {
+        sorted.refused.push(gettext(
             "A book's back cover is one photo; drop the photos one at a time.",
         ));
-        taken.clear();
+        sorted.read.clear();
+        sorted.ask.clear();
     }
-    (taken, refused)
+    sorted
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn files(list: &[(&str, bool)]) -> Vec<(String, bool)> {
-        list.iter().map(|(n, l)| ((*n).to_owned(), *l)).collect()
+    fn files(list: &[(&str, Reach)]) -> Vec<(String, Reach)> {
+        list.iter().map(|(n, r)| ((*n).to_owned(), *r)).collect()
     }
 
     #[test]
     fn only_photo_files_on_this_computer_are_taken_from_a_drop() {
-        let (taken, refused) = dropped(
+        let sorted = dropped(
             &files(&[
-                ("IMG_4890.HEIC", true),
-                ("notes.txt", true),
-                ("cover.jpg", false),
-                ("back.Jpeg", true),
-                ("README", true),
+                ("IMG_4890.HEIC", Reach::File),
+                ("notes.txt", Reach::File),
+                ("cover.jpg", Reach::Elsewhere),
+                ("back.Jpeg", Reach::File),
+                ("README", Reach::File),
+                ("p1.jpg", Reach::Unshared),
+                ("notes.txt", Reach::Unshared),
             ]),
             false,
         );
-        assert_eq!(taken, [0, 3]);
-        assert_eq!(refused.len(), 3);
-        assert!(refused[0].starts_with("notes.txt "));
-        assert!(refused[1].contains("save the photo first"));
+        assert_eq!(sorted.read, [0, 3]);
+        // A photo the file manager did not share is picked through the
+        // file chooser instead.
+        assert_eq!(sorted.ask, [5]);
+        assert_eq!(sorted.refused.len(), 4);
+        assert!(sorted.refused[0].starts_with("notes.txt "));
+        assert!(sorted.refused[1].contains("save the photo first"));
     }
 
     #[test]
     fn a_book_s_back_takes_one_dropped_photo() {
-        let (taken, refused) = dropped(&files(&[("back.jpg", true)]), true);
-        assert_eq!(taken, [0]);
-        assert!(refused.is_empty());
-        let (taken, refused) = dropped(&files(&[("a.jpg", true), ("b.png", true)]), true);
-        assert!(taken.is_empty());
-        assert_eq!(refused.len(), 1);
+        let sorted = dropped(&files(&[("back.jpg", Reach::File)]), true);
+        assert_eq!(sorted.read, [0]);
+        assert!(sorted.refused.is_empty());
+        let sorted = dropped(&files(&[("back.jpg", Reach::Unshared)]), true);
+        assert_eq!(sorted.ask, [0]);
+        let sorted = dropped(
+            &files(&[("a.jpg", Reach::File), ("b.png", Reach::Unshared)]),
+            true,
+        );
+        assert!(sorted.read.is_empty() && sorted.ask.is_empty());
+        assert_eq!(sorted.refused.len(), 1);
         // Several for new books are each a book.
-        let (taken, _) = dropped(&files(&[("a.jpg", true), ("b.png", true)]), false);
-        assert_eq!(taken, [0, 1]);
+        let sorted = dropped(
+            &files(&[("a.jpg", Reach::File), ("b.png", Reach::File)]),
+            false,
+        );
+        assert_eq!(sorted.read, [0, 1]);
     }
 }

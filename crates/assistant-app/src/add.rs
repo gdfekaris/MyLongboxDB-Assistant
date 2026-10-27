@@ -202,7 +202,7 @@ impl AddPage {
         let weak = Rc::downgrade(&page);
         page.add_photos.connect_clicked(move |_| {
             if let Some(page) = weak.upgrade() {
-                page.pick(Slot::New);
+                page.pick(Slot::New, None);
             }
         });
         page.take_drops(&photo_page, Slot::New);
@@ -237,7 +237,8 @@ impl AddPage {
     }
 
     /// Asks for photos for a new book each, or for one book's back.
-    fn pick(self: &Rc<Self>, slot: Slot) {
+    /// `start`, a photo the owner dropped, opens the chooser at it.
+    fn pick(self: &Rc<Self>, slot: Slot, start: Option<&gio::File>) {
         let filter = gtk::FileFilter::new();
         filter.set_name(Some(&gettext("Photos")));
         for mime in [
@@ -263,6 +264,9 @@ impl AddPage {
             .filters(&filters)
             .default_filter(&filter)
             .build();
+        if let Some(start) = start {
+            dialog.set_initial_file(Some(start));
+        }
         let window = self.root.root().and_downcast::<gtk::Window>();
         let page = Rc::downgrade(self);
         glib::spawn_future_local(async move {
@@ -290,36 +294,57 @@ impl AddPage {
     /// are taken, never pictures or web addresses dragged as they are:
     /// those would skip the photo limits or need a download.
     fn take_drops(self: &Rc<Self>, widget: &impl IsA<gtk::Widget>, slot: Slot) {
-        let target = gtk::DropTarget::new(gdk::FileList::static_type(), gdk::DragAction::COPY);
+        let formats = gdk::ContentFormats::for_type(gdk::FileList::static_type())
+            .union_deserialize_mime_types();
+        let target = gtk::DropTargetAsync::new(Some(formats), gdk::DragAction::COPY);
         let page = Rc::downgrade(self);
-        target.connect_drop(move |_, value, _, _| {
-            let (Some(page), Ok(list)) = (page.upgrade(), value.get::<gdk::FileList>()) else {
-                return false;
-            };
+        target.connect_drop(move |_, drop, _, _| {
+            let (drop, page) = (drop.clone(), page.clone());
             // Read after the drop ends, as reading rebuilds the rows, the
             // one dropped on among them.
-            glib::spawn_future_local(async move { page.dropped(list.files(), slot).await });
+            glib::spawn_future_local(async move {
+                let files = dropped_files(&drop).await;
+                drop.finish(if files.is_some() {
+                    gdk::DragAction::COPY
+                } else {
+                    gdk::DragAction::empty()
+                });
+                if let (Some(page), Some(files)) = (page.upgrade(), files) {
+                    page.dropped(files, slot).await;
+                }
+            });
             true
         });
         widget.add_controller(target);
     }
 
     async fn dropped(self: &Rc<Self>, files: Vec<gio::File>, slot: Slot) {
-        let named: Vec<(String, bool)> = files
+        let named: Vec<(String, photos::Reach)> = files
             .iter()
             .map(|file| {
                 let name = file
                     .basename()
                     .map(|n| n.to_string_lossy().into_owned())
                     .unwrap_or_else(|| file.uri().to_string());
-                (name, file.path().is_some())
+                let reach = match file.path() {
+                    Some(path) if path.exists() => photos::Reach::File,
+                    Some(_) => photos::Reach::Unshared,
+                    None => photos::Reach::Elsewhere,
+                };
+                (name, reach)
             })
             .collect();
-        let (taken, refused) = photos::dropped(&named, matches!(slot, Slot::Back(_)));
-        *self.problems.borrow_mut() = refused;
+        let sorted = photos::dropped(&named, matches!(slot, Slot::Back(_)));
+        *self.problems.borrow_mut() = sorted.refused;
         self.show_photos();
-        let files = taken.into_iter().map(|n| files[n].clone()).collect();
-        self.read(files, slot).await;
+        // The app cannot read a photo the file manager did not share, but
+        // knows where it is: the file chooser opens there, and picking it
+        // shares it, as Add Photos does.
+        if let Some(&first) = sorted.ask.first() {
+            self.pick(slot, Some(&files[first]));
+        }
+        let read = sorted.read.into_iter().map(|n| files[n].clone()).collect();
+        self.read(read, slot).await;
     }
 
     /// Reads the picked photos one at a time, so only one is ever held at
@@ -612,7 +637,7 @@ impl AddPage {
                         }));
                 }
                 button("list-add-symbolic", gettext("Add Back Cover…"))
-                    .connect_clicked(act(|p, i| p.pick(Slot::Back(i))));
+                    .connect_clicked(act(|p, i| p.pick(Slot::Back(i), None)));
             }
         }
         button("user-trash-symbolic", gettext("Remove Book")).connect_clicked(act(|p, i| {
@@ -711,6 +736,37 @@ fn refresh(page: &Weak<AddPage>) {
     if let Some(page) = page.upgrade() {
         page.refresh();
     }
+}
+
+/// How the file transfer portal offers dropped files to a sandboxed app,
+/// by its current name and its earlier one.
+const PORTAL_FILES: [&str; 2] = [
+    "application/vnd.portal.filetransfer",
+    "application/vnd.portal.files",
+];
+
+/// The files dropped, or `None` if they could not be read. A file
+/// manager outside the sandbox also offers the files' own paths, which do
+/// not exist inside it, so the copies the portal shares are asked for
+/// first.
+async fn dropped_files(drop: &gdk::Drop) -> Option<Vec<gio::File>> {
+    let formats = drop.formats();
+    let portal: Vec<&str> = PORTAL_FILES
+        .into_iter()
+        .filter(|m| formats.contain_mime_type(m))
+        .collect();
+    let file_list = gdk::FileList::static_type();
+    let value = if portal.is_empty() {
+        drop.read_value_future(file_list, glib::Priority::DEFAULT)
+            .await
+    } else {
+        let (stream, mime) = drop
+            .read_future(&portal, glib::Priority::DEFAULT)
+            .await
+            .ok()?;
+        gdk::content_deserialize_future(&stream, &mime, file_list, glib::Priority::DEFAULT).await
+    };
+    Some(value.ok()?.get::<gdk::FileList>().ok()?.files())
 }
 
 fn boxed_list() -> gtk::ListBox {
