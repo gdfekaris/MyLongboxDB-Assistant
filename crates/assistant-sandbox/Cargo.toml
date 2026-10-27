@@ -16,8 +16,8 @@ landlock = "0.4.7"
 seccompiler = { version = "0.5.0", default-features = false }
 
 [dev-dependencies]
-assistant-core = { path = "../assistant-core", version = "0.2.0" }
-assistant-keys = { path = "../assistant-keys", version = "0.2.0" }
+assistant-core = { path = "../assistant-core", version = "0.3.0" }
+assistant-keys = { path = "../assistant-keys", version = "0.3.0" }
 
 # The file limits refuse to apply while other threads run, so these run
 # as programs of their own, without the test runner's threads.

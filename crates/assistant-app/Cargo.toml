@@ -15,12 +15,12 @@ path = "src/main.rs"
 workspace = true
 
 [dependencies]
-assistant-core = { path = "../assistant-core", version = "0.2.0" }
-assistant-gcd = { path = "../assistant-gcd", version = "0.2.0" }
-assistant-keys = { path = "../assistant-keys", version = "0.2.0" }
-assistant-net = { path = "../assistant-net", version = "0.2.0" }
-assistant-media = { path = "../assistant-media", version = "0.2.0" }
-assistant-sandbox = { path = "../assistant-sandbox", version = "0.2.0" }
+assistant-core = { path = "../assistant-core", version = "0.3.0" }
+assistant-gcd = { path = "../assistant-gcd", version = "0.3.0" }
+assistant-keys = { path = "../assistant-keys", version = "0.3.0" }
+assistant-net = { path = "../assistant-net", version = "0.3.0" }
+assistant-media = { path = "../assistant-media", version = "0.3.0" }
+assistant-sandbox = { path = "../assistant-sandbox", version = "0.3.0" }
 adw = { package = "libadwaita", version = "0.9" }
 gtk = { package = "gtk4", version = "0.11", features = ["gnome_49"] }
 relm4 = { version = "0.11", default-features = false, features = ["macros", "libadwaita", "gnome_49"] }

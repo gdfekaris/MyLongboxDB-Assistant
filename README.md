@@ -20,7 +20,7 @@ The Assistant never opens your MyLongboxDB collection. MyLongboxDB
 itself stays offline; this separate app holds the network permission
 instead, and only ever sees the photos and text you give it.
 
-**Status:** 0.2.0 is the latest release. It is not on Flathub; install
+**Status:** 0.3.0 is the latest release. It is not on Flathub; install
 it from the Releases page as described below.
 
 ## Installing
@@ -28,14 +28,14 @@ it from the Releases page as described below.
 Each release on the repository's Releases page has a Flatpak bundle and
 its SHA-256 checksum. Check the download, then install it:
 
-    sha256sum -c MyLongboxDB-Assistant-0.2.0.flatpak.sha256
-    flatpak install --user MyLongboxDB-Assistant-0.2.0.flatpak
+    sha256sum -c MyLongboxDB-Assistant-0.3.0.flatpak.sha256
+    flatpak install --user MyLongboxDB-Assistant-0.3.0.flatpak
 
 GitHub also keeps a signed statement, made by the repository's CI, that
 each bundle was built from the tagged source. With the GitHub CLI
 installed, check it with:
 
-    gh attestation verify MyLongboxDB-Assistant-0.2.0.flatpak --repo gdfekaris/MyLongboxDB-Assistant
+    gh attestation verify MyLongboxDB-Assistant-0.3.0.flatpak --repo gdfekaris/MyLongboxDB-Assistant
 
 You need an Anthropic API key. Make one just for this app, in a
 workspace with a monthly spend limit, in the Claude Console.
@@ -215,11 +215,12 @@ authors.
   kernel instead of skipping that part. While the app runs,
   `grep Seccomp_filters /proc/$(pgrep -n -f '^mylongboxdb-assistant')/status`
   shows 2: Flatpak's own filter and the app's.
-- **Photos carry nothing but their pixels.** Every photo you pick is
-  checked against MyLongboxDB's limits (50 MB, 100 megapixels, 40,000
-  pixels a side) before it is decoded, then re-encoded from its pixels
-  alone, so no EXIF, GPS, XMP, IPTC, comment, or colour-profile data
-  reaches the provider or the export. Verify with
+- **Photos carry nothing but their pixels.** Every photo you pick or
+  drop in is checked against MyLongboxDB's limits (50 MB, 100
+  megapixels, 40,000 pixels a side) before it is decoded, then
+  re-encoded from its pixels alone, so no EXIF, GPS, XMP, IPTC,
+  comment, or colour-profile data reaches the provider or the export.
+  Verify with
   `cargo test -p assistant-media`, whose tests hide marked text in each
   kind of metadata and check that none of it survives, and by running
   `exiftool` or ImageMagick's `identify -verbose` on a photo in an
@@ -275,7 +276,9 @@ authors.
 - **Network and display only.** The Flatpak manifest grants exactly
   `--share=network`, `--socket=wayland`, `--socket=fallback-x11`,
   `--share=ipc`, and `--device=dri`: no access to your home folder or
-  the host filesystem. Verify with
+  the host filesystem. Photos reach the app only through the file
+  chooser, or, when you drag them in, as the copies the document
+  portal shares of just those files. Verify with
   `flatpak info --show-permissions io.github.gdfekaris.MyLongboxDB.Assistant`.
 
 ## Reporting vulnerabilities

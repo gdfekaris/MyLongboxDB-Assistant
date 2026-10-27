@@ -39,6 +39,17 @@
   </branding>
 
   <releases>
+    <release version="0.3.0" date="2026-10-27">
+      <description>
+        <p>Drag photos in, and one name per entry in the export.</p>
+        <ul>
+          <li>Drag cover photos onto the Photos tab, or one onto a book for its back cover</li>
+          <li>Characters and credits a lookup gave as one line are now one name each, so MyLongboxDB lists and finds each on its own</li>
+          <li>The photo list keeps your place when you combine, swap, or remove photos</li>
+          <li>The review page no longer puts the same note on every character</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.2.0" date="2026-10-26">
       <description>
         <p>Your own copy of the Grand Comics Database, grades for your copies, and an easier review.</p>
