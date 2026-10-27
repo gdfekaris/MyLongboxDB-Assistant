@@ -1240,6 +1240,44 @@ fn characters_go_by_the_names_they_are_known_by() {
 }
 
 #[test]
+fn a_line_of_names_copied_whole_is_one_entry_per_name() {
+    let mut answer = full_answer();
+    answer["credits"] = json!([
+        {"name": "Ada Sprocket; Rex Rivet", "role": "cover_artist", "source": 1, "confidence": "high"},
+        {"name": "Rex Rivet", "role": "cover_artist", "source": 2, "confidence": "high"},
+        {"name": "Rex Rivet;", "role": "penciller", "source": 1, "confidence": "high"}
+    ]);
+    answer["characters"] = json!([
+        {"name": "Captain Cog; Tinman; Professor Gear", "first_appearance": false, "source": 1, "confidence": "high"},
+        {"name": "Tinman; Captain Cog", "first_appearance": false, "source": 2, "confidence": "high"}
+    ]);
+    let provider = Scripted::new(vec![researched(2), answered(answer), no_problems()]);
+    let draft = run(&provider, "Astonishing Robot Tales (1954) #1")
+        .0
+        .unwrap();
+    let names = |list: &[Entry]| list.iter().map(|e| e.name.clone()).collect::<Vec<_>>();
+    assert_eq!(
+        names(&draft.credits),
+        ["Ada Sprocket", "Rex Rivet", "Rex Rivet"]
+    );
+    assert_eq!(draft.credits[1].detail, Detail::Role(Role::CoverArtist));
+    assert_eq!(draft.credits[2].detail, Detail::Role(Role::Penciller));
+    assert_eq!(
+        names(&draft.characters),
+        ["Captain Cog", "Tinman", "Professor Gear"]
+    );
+    let book = draft.book(2026).unwrap();
+    assert!(
+        book.issue
+            .credits
+            .iter()
+            .map(|c| &c.name)
+            .chain(book.issue.characters.iter().map(|c| &c.name))
+            .all(|name| !name.contains(';'))
+    );
+}
+
+#[test]
 fn a_reading_that_does_not_follow_the_schema_is_refused() {
     let mut extra = robot_cover();
     extra["items"]["secret"] = json!({"text": "x", "where": "y"});

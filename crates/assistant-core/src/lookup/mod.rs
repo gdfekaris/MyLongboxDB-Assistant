@@ -40,6 +40,7 @@ use crate::lines::BookQuery;
 use crate::model::{Category, Confidence, Jpeg, Role};
 use crate::money::Picodollars;
 use draft::fits_category;
+pub(crate) use draft::{names, without_repeats};
 pub use fields::clean;
 use schema::{Action, Checked, FieldAnswer, MAX_LIST, Named, Status, Structured};
 
@@ -519,27 +520,32 @@ fn entries<T>(
     sources: &[Source],
     detail: impl Fn(T) -> Option<Detail>,
 ) -> Vec<Entry> {
-    named
+    let mut list: Vec<Entry> = named
         .into_iter()
         .filter_map(|n| {
-            let name = clean(&n.name, MAX_NAME);
             // A name with no cited source is not kept.
             let source = source_index(n.source, sources)?;
             let detail = detail(n.detail)?;
-            if name.is_empty() {
-                return None;
-            }
             let confidence = Confidence::from(n.confidence);
-            Some(Entry {
-                name,
-                detail,
-                source: Some(source),
-                confidence,
-                note: String::new(),
-                accepted: trusted(&sources[source], confidence),
-            })
+            Some(
+                names(&n.name)
+                    .map(|name| clean(name, MAX_NAME))
+                    .filter(|name| !name.is_empty())
+                    .map(|name| Entry {
+                        name,
+                        detail,
+                        source: Some(source),
+                        confidence,
+                        note: String::new(),
+                        accepted: trusted(&sources[source], confidence),
+                    })
+                    .collect::<Vec<_>>(),
+            )
         })
-        .collect()
+        .flatten()
+        .collect();
+    without_repeats(&mut list);
+    list
 }
 
 fn read_structured(

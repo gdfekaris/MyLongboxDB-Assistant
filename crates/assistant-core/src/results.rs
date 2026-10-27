@@ -14,7 +14,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::issue_number::IssueNumber;
 use crate::lines::BookQuery;
-use crate::lookup::{Candidate, Detail, Draft, Entry, Identity, Source, Value, check, spec};
+use crate::lookup::{
+    Candidate, Detail, Draft, Entry, Identity, Source, Value, check, names, spec, without_repeats,
+};
 use crate::model::{Confidence, CopyInfo, Grade, GradeType, Jpeg, Role};
 
 /// The format written; a file of another one is not read.
@@ -335,21 +337,30 @@ fn entries(
     sources: usize,
     detail: impl Fn(&SavedEntry) -> Option<Detail>,
 ) -> Vec<Entry> {
-    saved
+    // Books looked up before names were split may hold several in one.
+    let mut list: Vec<Entry> = saved
         .into_iter()
         .filter_map(|e| {
             let detail = detail(&e)?;
-            let name = clean(&e.name);
-            (!name.is_empty()).then(|| Entry {
-                name,
-                detail,
-                source: e.source.filter(|s| *s < sources),
-                confidence: confidence(&e.confidence),
-                note: clean(&e.note),
-                accepted: e.accepted,
-            })
+            Some(
+                names(&e.name)
+                    .map(clean)
+                    .filter(|name| !name.is_empty())
+                    .map(|name| Entry {
+                        name,
+                        detail,
+                        source: e.source.filter(|s| *s < sources),
+                        confidence: confidence(&e.confidence),
+                        note: clean(&e.note),
+                        accepted: e.accepted,
+                    })
+                    .collect::<Vec<_>>(),
+            )
         })
-        .collect()
+        .flatten()
+        .collect();
+    without_repeats(&mut list);
+    list
 }
 
 fn book(saved: Saved, this_year: u16, photo: &dyn Fn(&str) -> Option<Photo>) -> Option<ReviewBook> {

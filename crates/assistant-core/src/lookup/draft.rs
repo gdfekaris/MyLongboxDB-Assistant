@@ -285,6 +285,28 @@ impl Draft {
     }
 }
 
+/// The names in a list entry's text. MyLongboxDB keeps one name per
+/// entry, and a cast or credit line copied whole from a record, such as
+/// "Silver Surfer; Thanos", would otherwise be imported as one long name
+/// that clutters its search.
+pub(crate) fn names(text: &str) -> impl Iterator<Item = &str> {
+    text.split(';').map(str::trim).filter(|n| !n.is_empty())
+}
+
+/// Drops the later repeats of an entry, as a line split into names can
+/// give a name already listed.
+pub(crate) fn without_repeats(list: &mut Vec<Entry>) {
+    let mut seen: Vec<(String, Detail)> = Vec::new();
+    list.retain(|e| {
+        let key = (e.name.clone(), e.detail);
+        let fresh = !seen.contains(&key);
+        if fresh {
+            seen.push(key);
+        }
+        fresh
+    });
+}
+
 /// Whether a field means anything for a book of this category, so a
 /// value for another kind of book is set aside.
 pub(crate) fn fits_category(key: &str, category: Category) -> bool {

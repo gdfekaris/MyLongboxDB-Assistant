@@ -133,6 +133,18 @@ fn an_altered_file_cannot_slip_in_what_a_lookup_could_not() {
 }
 
 #[test]
+fn a_saved_entry_holding_several_names_reads_back_as_one_each() {
+    let read = altered(|f| {
+        f["books"][0]["characters"][0]["name"] = json!("Tinman; Captain Cog; Tinman");
+    });
+    let characters = &read[0].draft.characters;
+    let names: Vec<&str> = characters.iter().map(|e| e.name.as_str()).collect();
+    assert_eq!(names, ["Tinman", "Captain Cog"]);
+    assert!(characters.iter().all(|e| e.accepted && e.source == Some(0)));
+    assert_eq!(characters[1].detail, Detail::FirstAppearance(true));
+}
+
+#[test]
 fn unreadable_books_are_left_out_and_unreadable_files_refused() {
     let read = altered(|f| f["books"][0]["number"] = json!("   "));
     assert_eq!(read.len(), 1);
