@@ -905,6 +905,8 @@ pub fn look_up_covers(
     variant_name(&mut draft);
     if covers.chosen.is_some() && draft.identity == Identity::Identified {
         given_volume(&mut draft);
+    } else {
+        series_from_cover(&mut draft, &reading);
     }
     Ok(draft)
 }
@@ -971,6 +973,54 @@ fn facsimile(draft: &mut Draft, reading: &Reading) {
                 value.accepted = false;
             }
             _ => {}
+        }
+    }
+}
+
+/// A title reduced to what tells titles apart: lower case, & read as and,
+/// punctuation as spaces, and without a leading The or a trailing
+/// Annual, which the collection adds to an annual's series.
+fn title_key(title: &str) -> String {
+    let lower = title.to_lowercase().replace('&', " and ");
+    let spaced: String = lower
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { ' ' })
+        .collect();
+    let mut words: Vec<&str> = spaced.split_whitespace().collect();
+    if words.len() > 1 && words[0] == "the" {
+        words.remove(0);
+    }
+    if words.len() > 1 && words.last() == Some(&"annual") {
+        words.pop();
+    }
+    words.join(" ")
+}
+
+/// A series named otherwise than the owner's cover prints its title waits
+/// for the owner's word. Catalogues and pages file many books under a
+/// name the cover does not print, a translated edition under its
+/// original's, a logo under its plain series, and only the owner knows
+/// which name their collection keeps; a wrong one would file the book in
+/// another series.
+fn series_from_cover(draft: &mut Draft, reading: &Reading) {
+    let Some(title) = reading.get("title").map(|t| t.text.clone()) else {
+        return;
+    };
+    if draft.identity != Identity::Identified {
+        return;
+    }
+    if let Some(value) = draft
+        .values
+        .iter_mut()
+        .find(|v| v.key == "series" && !v.text.is_empty())
+        && title_key(&value.text) != title_key(&title)
+    {
+        value.accepted = false;
+        if value.note.is_empty() {
+            value.note = format!(
+                "your cover's title reads \u{201c}{}\u{201d}: keep the name your collection files it under",
+                clean(&title, MAX_NAME)
+            );
         }
     }
 }

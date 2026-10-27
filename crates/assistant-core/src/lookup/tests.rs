@@ -1600,3 +1600,38 @@ fn the_cover_s_barcode_is_given_to_the_catalogue_copy() {
     assert_eq!(asked[0].0.series, "Astonishing Robot Tales");
     assert_eq!(asked[0].1.as_deref(), Some("75960608936900111"));
 }
+
+#[test]
+fn a_series_named_otherwise_than_the_cover_waits_for_the_owner() {
+    let run_named = |series: &str, title: &str| {
+        let mut cover = robot_cover();
+        cover["items"]["title"] = json!({"text": title, "where": "front, top"});
+        let provider = Scripted::new(vec![
+            answered(cover),
+            researched(2),
+            answered(photo_structured(&[("series", value(series, 1, "high"))])),
+            no_problems(),
+        ]);
+        run_covers(&provider, false)
+            .0
+            .unwrap()
+            .value("series")
+            .unwrap()
+            .clone()
+    };
+    // The same title, whatever its case, punctuation, or leading The.
+    assert!(run_named("The Astonishing Robot Tales", "ASTONISHING ROBOT-TALES").accepted);
+    // A translated edition filed under its original's name, or a logo
+    // that adds a name, waits.
+    let filed = run_named(
+        "Robot Tales/Las Asombrosas Historias",
+        "Las Asombrosas Historias",
+    );
+    assert!(!filed.accepted);
+    assert!(
+        filed.note.contains("Las Asombrosas Historias"),
+        "{}",
+        filed.note
+    );
+    assert!(!run_named("Robot Tales", "Tinman, the Astonishing Robot Tales").accepted);
+}
