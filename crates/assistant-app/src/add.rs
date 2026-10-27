@@ -465,6 +465,15 @@ impl AddPage {
     }
 
     fn show_photos(self: &Rc<Self>) {
+        // A button pressed in a row goes with the row, and GTK would hand
+        // its focus to the list and scroll the page up to show it.
+        if let Some(root) = self.photo_list.root()
+            && root
+                .focus()
+                .is_some_and(|f| f.is_ancestor(&self.photo_list))
+        {
+            root.set_focus(None::<&gtk::Widget>);
+        }
         while let Some(row) = self.problem_list.first_child() {
             self.problem_list.remove(&row);
         }
