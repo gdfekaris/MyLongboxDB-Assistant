@@ -153,3 +153,83 @@ pub fn not_added(name: &str, why: &str) -> String {
         &[("name", name), ("why", why)],
     )
 }
+
+/// The endings of the photo files the app takes, as the file chooser
+/// offers them.
+pub const SUFFIXES: [&str; 6] = ["jpg", "jpeg", "png", "webp", "heic", "heif"];
+
+/// Of the files dropped on the page, by name and whether each is a file
+/// on this computer: the places of those to read, and a line for each
+/// refused. A photo dragged from a web page can arrive as its address
+/// alone, and the app never downloads anything, so it must be saved
+/// first. `one_only` is for a book's back, which takes a single photo.
+pub fn dropped(files: &[(String, bool)], one_only: bool) -> (Vec<usize>, Vec<String>) {
+    let mut taken = Vec::new();
+    let mut refused = Vec::new();
+    for (n, (name, local)) in files.iter().enumerate() {
+        let suffix = name
+            .rsplit_once('.')
+            .map(|(_, s)| s.to_ascii_lowercase())
+            .unwrap_or_default();
+        if !local {
+            refused.push(not_added(
+                name,
+                &gettext("only files on this computer can be added; save the photo first"),
+            ));
+        } else if !SUFFIXES.contains(&suffix.as_str()) {
+            refused.push(not_added(
+                name,
+                &gettext("only JPEG, PNG, WebP, and HEIC photos can be added"),
+            ));
+        } else {
+            taken.push(n);
+        }
+    }
+    if one_only && taken.len() > 1 {
+        refused.push(gettext(
+            "A book's back cover is one photo; drop the photos one at a time.",
+        ));
+        taken.clear();
+    }
+    (taken, refused)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn files(list: &[(&str, bool)]) -> Vec<(String, bool)> {
+        list.iter().map(|(n, l)| ((*n).to_owned(), *l)).collect()
+    }
+
+    #[test]
+    fn only_photo_files_on_this_computer_are_taken_from_a_drop() {
+        let (taken, refused) = dropped(
+            &files(&[
+                ("IMG_4890.HEIC", true),
+                ("notes.txt", true),
+                ("cover.jpg", false),
+                ("back.Jpeg", true),
+                ("README", true),
+            ]),
+            false,
+        );
+        assert_eq!(taken, [0, 3]);
+        assert_eq!(refused.len(), 3);
+        assert!(refused[0].starts_with("notes.txt "));
+        assert!(refused[1].contains("save the photo first"));
+    }
+
+    #[test]
+    fn a_book_s_back_takes_one_dropped_photo() {
+        let (taken, refused) = dropped(&files(&[("back.jpg", true)]), true);
+        assert_eq!(taken, [0]);
+        assert!(refused.is_empty());
+        let (taken, refused) = dropped(&files(&[("a.jpg", true), ("b.png", true)]), true);
+        assert!(taken.is_empty());
+        assert_eq!(refused.len(), 1);
+        // Several for new books are each a book.
+        let (taken, _) = dropped(&files(&[("a.jpg", true), ("b.png", true)]), false);
+        assert_eq!(taken, [0, 1]);
+    }
+}

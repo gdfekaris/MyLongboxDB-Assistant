@@ -9,7 +9,7 @@ use adw::prelude::*;
 use assistant_core::lines::{BookQuery, LineProblem, parse_lines};
 use assistant_core::queue::MAX_BATCH;
 use assistant_media::Edit;
-use gtk::{gio, glib};
+use gtk::{gdk, gio, glib};
 
 use crate::i18n::{gettext, gettext_f};
 use crate::photo_editor;
@@ -99,8 +99,8 @@ impl AddPage {
 
         let photo_intro = gtk::Label::builder()
             .label(gettext(
-                "Add photos of your books' front covers, one book a photo. If you took a \
-                 book's back cover too, add it to that book.",
+                "Add or drag in photos of your books' front covers, one book a photo. If \
+                 you took a book's back cover too, add it or drop it on that book.",
             ))
             .wrap(true)
             .xalign(0.0)
@@ -205,6 +205,7 @@ impl AddPage {
                 page.pick(Slot::New);
             }
         });
+        page.take_drops(&photo_page, Slot::New);
         page.refresh();
         page
     }
@@ -248,7 +249,7 @@ impl AddPage {
         ] {
             filter.add_mime_type(mime);
         }
-        for suffix in ["jpg", "jpeg", "png", "webp", "heic", "heif"] {
+        for suffix in photos::SUFFIXES {
             filter.add_suffix(suffix);
         }
         let filters = gio::ListStore::new::<gtk::FileFilter>();
@@ -282,6 +283,43 @@ impl AddPage {
                 page.read(files, slot).await;
             }
         });
+    }
+
+    /// Lets photo files dragged onto `widget`, from the file manager or
+    /// anywhere else that gives files, be added as `slot` says. Only files
+    /// are taken, never pictures or web addresses dragged as they are:
+    /// those would skip the photo limits or need a download.
+    fn take_drops(self: &Rc<Self>, widget: &impl IsA<gtk::Widget>, slot: Slot) {
+        let target = gtk::DropTarget::new(gdk::FileList::static_type(), gdk::DragAction::COPY);
+        let page = Rc::downgrade(self);
+        target.connect_drop(move |_, value, _, _| {
+            let (Some(page), Ok(list)) = (page.upgrade(), value.get::<gdk::FileList>()) else {
+                return false;
+            };
+            // Read after the drop ends, as reading rebuilds the rows, the
+            // one dropped on among them.
+            glib::spawn_future_local(async move { page.dropped(list.files(), slot).await });
+            true
+        });
+        widget.add_controller(target);
+    }
+
+    async fn dropped(self: &Rc<Self>, files: Vec<gio::File>, slot: Slot) {
+        let named: Vec<(String, bool)> = files
+            .iter()
+            .map(|file| {
+                let name = file
+                    .basename()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| file.uri().to_string());
+                (name, file.path().is_some())
+            })
+            .collect();
+        let (taken, refused) = photos::dropped(&named, matches!(slot, Slot::Back(_)));
+        *self.problems.borrow_mut() = refused;
+        self.show_photos();
+        let files = taken.into_iter().map(|n| files[n].clone()).collect();
+        self.read(files, slot).await;
     }
 
     /// Reads the picked photos one at a time, so only one is ever held at
@@ -502,6 +540,9 @@ impl AddPage {
             thumbnails.append(&edit);
         }
         row.add_prefix(&thumbnails);
+        if book.back.is_none() {
+            self.take_drops(&row, Slot::Back(i));
+        }
         let button = |icon: &str, tip: String| {
             let button = gtk::Button::builder()
                 .icon_name(icon)
