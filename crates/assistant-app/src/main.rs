@@ -2,6 +2,7 @@
 
 #![forbid(unsafe_code)]
 
+mod about;
 mod add;
 mod app;
 mod catalogue;

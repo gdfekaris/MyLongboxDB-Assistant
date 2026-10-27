@@ -1,4 +1,5 @@
 # Files with text to translate, from the repository root.
+crates/assistant-app/src/about.rs
 crates/assistant-app/src/add.rs
 crates/assistant-app/src/app.rs
 crates/assistant-app/src/catalogue.rs

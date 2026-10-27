@@ -81,6 +81,7 @@ pub enum AppMsg {
     CatalogueProgress(assistant_gcd::Step, u64),
     CatalogueAdded(Result<assistant_gcd::Imported, assistant_gcd::ImportError>),
     RemoveCatalogue,
+    ShowAbout,
 }
 
 /// Which work page is showing when the app is unlocked.
@@ -142,6 +143,7 @@ impl std::fmt::Debug for AppMsg {
             Self::CatalogueProgress(..) => "CatalogueProgress",
             Self::CatalogueAdded(_) => "CatalogueAdded",
             Self::RemoveCatalogue => "RemoveCatalogue",
+            Self::ShowAbout => "ShowAbout",
         })
     }
 }
@@ -1064,6 +1066,12 @@ impl SimpleComponent for App {
             Some(&gettext("_Grand Comics Database…")),
             Some("win.catalogue"),
         );
+        let about = gio::Menu::new();
+        about.append(
+            Some(&gettext("_About MyLongboxDB Assistant")),
+            Some("win.about"),
+        );
+        menu.append_section(None, &about);
         let header = adw::HeaderBar::new();
         header.pack_end(
             &gtk::MenuButton::builder()
@@ -1249,6 +1257,7 @@ impl SimpleComponent for App {
         model.action("setup", || AppMsg::SetUpAgain);
         model.action("forget", || AppMsg::Forget);
         model.action("catalogue", || AppMsg::Catalogue);
+        model.action("about", || AppMsg::ShowAbout);
         model.show_start();
         model.review.show_list(&model.results);
         if let Some(why) = unreadable {
@@ -1602,6 +1611,9 @@ impl SimpleComponent for App {
                 self.show_setup();
             }
             AppMsg::Catalogue => self.show_catalogue(),
+            AppMsg::ShowAbout => {
+                crate::about::show(&self.window, self.catalog.as_ref().map(|c| c.about()));
+            }
             AppMsg::CatalogueFile(file) => self.add_catalogue(&file),
             AppMsg::CatalogueProgress(step, count) => {
                 if let Some(progress) = &mut self.importing {
