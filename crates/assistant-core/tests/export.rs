@@ -114,8 +114,8 @@ fn books() -> Vec<Book> {
         credit("Rex Rivet", Role::Artist),
         credit("Penny Pencil", Role::Penciller),
         credit("Ike Inkwell", Role::Inker),
-        credit("Pipe | Bar", Role::Colorist),
-        credit("Ann; Semicolon", Role::Letterer),
+        credit("Pip Palette", Role::Colorist),
+        credit("Ann Inkwell", Role::Letterer),
         credit("Cora Cover", Role::CoverArtist),
         credit(r"Back\Slash", Role::Editor),
     ];
@@ -292,8 +292,8 @@ fn cells_are_written_as_mylongboxdb_writes_them() {
     assert_eq!(first["Canadian Cover Price"], "0.15");
     assert_eq!(first["Barcode"], "75960608936900111");
     assert_eq!(first["Distribution"], "direct");
-    assert_eq!(first["Letterers"], r"Ann\; Semicolon");
-    assert_eq!(first["Colorists"], r"Pipe \| Bar");
+    assert_eq!(first["Letterers"], "Ann Inkwell");
+    assert_eq!(first["Colorists"], "Pip Palette");
     assert_eq!(first["Editors"], r"Back\\Slash");
     assert_eq!(first["Characters"], "Tinman; Professor Gears");
     assert_eq!(first["First Appearances of Characters"], "Tinman");

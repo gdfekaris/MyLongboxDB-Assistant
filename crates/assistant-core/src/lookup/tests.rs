@@ -1680,3 +1680,98 @@ fn a_series_named_otherwise_than_the_cover_waits_for_the_owner() {
     );
     assert!(!run_named("Robot Tales", "Tinman, the Astonishing Robot Tales").accepted);
 }
+
+#[test]
+fn creators_are_taken_apart_into_one_name_each() {
+    for (text, want) in [
+        (
+            "Jack Kirby & John Romita",
+            vec!["Jack Kirby", "John Romita"],
+        ),
+        ("Stan Lee and Jack Kirby", vec!["Stan Lee", "Jack Kirby"]),
+        ("Kirby/Romita", vec!["Kirby", "Romita"]),
+        (
+            "Ada Sprocket, Rex Rivet; Ink Blot",
+            vec!["Ada Sprocket", "Rex Rivet", "Ink Blot"],
+        ),
+        ("John Romita, Jr.", vec!["John Romita Jr."]),
+        (
+            "Rex Rivet, Sr. & Ada  Sprocket",
+            vec!["Rex Rivet Sr.", "Ada Sprocket"],
+        ),
+        ("Andy Anderson", vec!["Andy Anderson"]),
+        (" ; & , ", vec![]),
+    ] {
+        let (names, doubtful) = split_names(text, NameList::Creators);
+        assert_eq!(names, want, "{text}");
+        assert!(!doubtful, "{text}");
+    }
+}
+
+#[test]
+fn characters_and_teams_taken_apart_wait_for_the_owner() {
+    let (names, doubtful) = split_names("Tinman; Captain Cog", NameList::Characters);
+    assert_eq!(names, ["Tinman", "Captain Cog"]);
+    assert!(!doubtful);
+    let (names, doubtful) = split_names("Tinman and Captain Cog", NameList::Characters);
+    assert_eq!(names, ["Tinman", "Captain Cog"]);
+    assert!(doubtful);
+    assert!(split_note("Tinman and Captain Cog", NameList::Characters, 2).contains("taken apart"));
+    // A team named with and is kept whole, for the owner to judge.
+    let (names, doubtful) = split_names("Bolt & Nut", NameList::Teams);
+    assert_eq!(names, ["Bolt & Nut"]);
+    assert!(doubtful);
+    assert!(split_note("Bolt & Nut", NameList::Teams, 1).contains("one team"));
+    let (names, doubtful) = split_names("Gearworks/Cogsmiths", NameList::Teams);
+    assert_eq!(names, ["Gearworks", "Cogsmiths"]);
+    assert!(doubtful);
+    let (names, doubtful) = split_names("Gearworks; Cogsmiths", NameList::Teams);
+    assert_eq!(names, ["Gearworks", "Cogsmiths"]);
+    assert!(!doubtful);
+    // Story arc titles keep their and.
+    let (names, doubtful) = split_names("Rust and Ruin | Part Two", NameList::StoryArcs);
+    assert_eq!(names, ["Rust and Ruin", "Part Two"]);
+    assert!(!doubtful);
+}
+
+#[test]
+fn a_lookup_gives_one_name_to_each_entry() {
+    let mut answer = full_answer();
+    answer["credits"] = json!([
+        {"name": "Ada Sprocket & Rex Rivet", "role": "cover_artist", "source": 1, "confidence": "high"}
+    ]);
+    answer["characters"] = json!([
+        {"name": "Tinman and Captain Cog", "first_appearance": true, "source": 1, "confidence": "high"}
+    ]);
+    answer["teams"] = json!([
+        {"name": "Bolt & Nut", "first_appearance": false, "source": 1, "confidence": "high"}
+    ]);
+    let provider = Scripted::new(vec![researched(2), answered(answer), no_problems()]);
+    let draft = run(&provider, "ART #1").0.unwrap();
+    let names = |list: &[Entry]| list.iter().map(|e| e.name.clone()).collect::<Vec<_>>();
+    assert_eq!(names(&draft.credits), ["Ada Sprocket", "Rex Rivet"]);
+
+    assert_eq!(names(&draft.characters), ["Tinman", "Captain Cog"]);
+    assert!(
+        draft
+            .characters
+            .iter()
+            .all(|e| !e.accepted && e.note.contains("taken apart"))
+    );
+    assert_eq!(names(&draft.teams), ["Bolt & Nut"]);
+    assert!(!draft.teams[0].accepted);
+    // Nothing the owner ticks can carry two names into the export.
+    let mut draft = draft;
+    for entry in draft
+        .credits
+        .iter_mut()
+        .chain(&mut draft.characters)
+        .chain(&mut draft.teams)
+    {
+        entry.accepted = true;
+    }
+    let book = draft.book(YEAR).unwrap();
+    let cover: Vec<&str> = book.issue.credits.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(cover, ["Ada Sprocket", "Rex Rivet"]);
+    assert!(book.problems().is_empty());
+}

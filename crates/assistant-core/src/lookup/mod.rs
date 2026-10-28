@@ -40,7 +40,7 @@ use crate::lines::BookQuery;
 use crate::model::{Category, Confidence, Jpeg, Role};
 use crate::money::Picodollars;
 use draft::fits_category;
-pub(crate) use draft::{names, without_repeats};
+pub(crate) use draft::{NameList, split_names, split_note, without_repeats};
 pub use fields::clean;
 use schema::{Action, Checked, FieldAnswer, MAX_LIST, Named, Status, Structured};
 
@@ -518,6 +518,7 @@ const MAX_NAME: usize = 200;
 fn entries<T>(
     named: Vec<Named<T>>,
     sources: &[Source],
+    kind: NameList,
     detail: impl Fn(T) -> Option<Detail>,
 ) -> Vec<Entry> {
     let mut list: Vec<Entry> = named
@@ -527,17 +528,23 @@ fn entries<T>(
             let source = source_index(n.source, sources)?;
             let detail = detail(n.detail)?;
             let confidence = Confidence::from(n.confidence);
+            let text = clean(&n.name, MAX_NAME);
+            let (names, doubtful) = split_names(&text, kind);
+            let note = if doubtful {
+                split_note(&text, kind, names.len())
+            } else {
+                String::new()
+            };
             Some(
-                names(&n.name)
-                    .map(|name| clean(name, MAX_NAME))
-                    .filter(|name| !name.is_empty())
+                names
+                    .into_iter()
                     .map(|name| Entry {
                         name,
                         detail,
                         source: Some(source),
                         confidence,
-                        note: String::new(),
-                        accepted: trusted(&sources[source], confidence),
+                        note: note.clone(),
+                        accepted: !doubtful && trusted(&sources[source], confidence),
                     })
                     .collect::<Vec<_>>(),
             )
@@ -658,25 +665,33 @@ fn read_structured(
             value.note = "left out: not for this kind of book".into();
         }
     }
-    draft.credits = entries(answer.credits, sources, |role: String| {
-        Role::from_code(&role).map(Detail::Role)
-    });
-    draft.characters = entries(answer.characters, sources, |first| {
+    draft.credits = entries(
+        answer.credits,
+        sources,
+        NameList::Creators,
+        |role: String| Role::from_code(&role).map(Detail::Role),
+    );
+    draft.characters = entries(answer.characters, sources, NameList::Characters, |first| {
         Some(Detail::FirstAppearance(first))
     });
-    draft.teams = entries(answer.teams, sources, |first| {
+    draft.teams = entries(answer.teams, sources, NameList::Teams, |first| {
         Some(Detail::FirstAppearance(first))
     });
-    draft.story_arcs = entries(answer.story_arcs, sources, |part: String| {
-        let part = part.trim();
-        if part.is_empty() {
-            return Some(Detail::Part(None));
-        }
-        part.parse::<u32>()
-            .ok()
-            .filter(|p| *p >= 1)
-            .map(|p| Detail::Part(Some(p)))
-    });
+    draft.story_arcs = entries(
+        answer.story_arcs,
+        sources,
+        NameList::StoryArcs,
+        |part: String| {
+            let part = part.trim();
+            if part.is_empty() {
+                return Some(Detail::Part(None));
+            }
+            part.parse::<u32>()
+                .ok()
+                .filter(|p| *p >= 1)
+                .map(|p| Detail::Part(Some(p)))
+        },
+    );
     Ok(draft)
 }
 

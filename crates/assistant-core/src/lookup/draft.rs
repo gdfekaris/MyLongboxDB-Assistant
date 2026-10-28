@@ -231,14 +231,7 @@ impl Draft {
         book.edition.variant = get("variant").unwrap_or_default();
         if !book.edition.variant.is_empty() {
             book.edition.cover_artists = get("variant_cover_artists")
-                .map(|names| {
-                    names
-                        .split(';')
-                        .map(str::trim)
-                        .filter(|n| !n.is_empty())
-                        .map(str::to_owned)
-                        .collect()
-                })
+                .map(|names| split_names(&names, NameList::Creators).0)
                 .unwrap_or_default();
         }
         book.edition.printing = number("printing");
@@ -285,12 +278,116 @@ impl Draft {
     }
 }
 
-/// The names in a list entry's text. MyLongboxDB keeps one name per
-/// entry, and a cast or credit line copied whole from a record, such as
-/// "Silver Surfer; Thanos", would otherwise be imported as one long name
-/// that clutters its search.
-pub(crate) fn names(text: &str) -> impl Iterator<Item = &str> {
-    text.split(';').map(str::trim).filter(|n| !n.is_empty())
+/// Which list a name is for, which decides how a text naming several is
+/// taken apart.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum NameList {
+    Creators,
+    Characters,
+    Teams,
+    StoryArcs,
+}
+
+/// The names in a list entry's text, one each, and whether the owner
+/// should look at them before they are ticked.
+///
+/// MyLongboxDB keeps whatever one entry holds as one name, just as its
+/// own form keeps what one row holds, so a credit or cast line copied
+/// whole, such as "Jack Kirby & John Romita", would become a creator of
+/// that name that its search then finds beside each real one.
+///
+/// Every list is split at `;` and `|`, which never belong in a name.
+/// Creators are also split at `,`, `/`, `&`, and the word and, as a
+/// person's name holds none of them; a suffix such as Jr. stays with the
+/// name before it. Characters are split the same way, but a name such
+/// as Ant-Man and the Wasp can hold them, so the parts are for the owner
+/// to look at. Teams are split at `,` and `/` for the owner to look at,
+/// and a team name holding `&` or and, as Hawk and Dove does, is kept
+/// whole for the owner to look at. Story arc titles often hold and, and
+/// are split at `;` and `|` only.
+pub(crate) fn split_names(text: &str, list: NameList) -> (Vec<String>, bool) {
+    let mut names = Vec::new();
+    let mut doubtful = false;
+    for part in text.split([';', '|']) {
+        let found = match list {
+            NameList::StoryArcs => vec![tidy(part)],
+            NameList::Creators | NameList::Characters => {
+                let found = joined(part, &[',', '/', '&'], true);
+                doubtful |= list == NameList::Characters && found.len() > 1;
+                found
+            }
+            NameList::Teams => {
+                let found = joined(part, &[',', '/'], false);
+                doubtful |= found.len() > 1 || found.iter().any(|n| has_and(n));
+                found
+            }
+        };
+        names.extend(found.into_iter().filter(|n| !n.is_empty()));
+    }
+    (names, doubtful)
+}
+
+/// Spacing collapsed, as MyLongboxDB keeps a name.
+fn tidy(name: &str) -> String {
+    name.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Whether a name holds `&` or the word and.
+fn has_and(name: &str) -> bool {
+    name.contains('&')
+        || name
+            .split_whitespace()
+            .any(|w| w.eq_ignore_ascii_case("and"))
+}
+
+/// What follows a surname after a comma and belongs to it.
+fn is_suffix(part: &str) -> bool {
+    let part = part.trim().trim_end_matches('.');
+    ["jr", "sr", "ii", "iii", "iv"]
+        .iter()
+        .any(|s| part.eq_ignore_ascii_case(s))
+}
+
+/// `text` split at each of `marks` and, if `and` is set, at the word
+/// and, with a suffix after a comma kept on the name before it.
+fn joined(text: &str, marks: &[char], and: bool) -> Vec<String> {
+    let mut names: Vec<String> = Vec::new();
+    for piece in text.split(marks) {
+        if is_suffix(piece)
+            && let Some(last) = names.last_mut()
+        {
+            last.push(' ');
+            last.push_str(piece.trim());
+            continue;
+        }
+        let words: Vec<&str> = piece.split_whitespace().collect();
+        if and {
+            names.extend(
+                words
+                    .split(|w| w.eq_ignore_ascii_case("and"))
+                    .map(|w| w.join(" ")),
+            );
+        } else {
+            names.push(words.join(" "));
+        }
+    }
+    names.retain(|n| !n.is_empty());
+    names
+}
+
+/// Why a name taken apart, or one that may name several, waits for the
+/// owner.
+pub(crate) fn split_note(text: &str, list: NameList, parts: usize) -> String {
+    if parts > 1 {
+        format!(
+            "taken apart from \u{201c}{}\u{201d}; tick each that is a name of its own",
+            tidy(text)
+        )
+    } else if list == NameList::Teams {
+        "may name more than one team; tick it only if it is one team\u{2019}s name".into()
+    } else {
+        String::new()
+    }
 }
 
 /// Drops the later repeats of an entry, as a line split into names can

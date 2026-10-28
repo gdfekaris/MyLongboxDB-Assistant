@@ -369,8 +369,15 @@ impl Book {
         let names = names
             .chain(self.issue.story_arcs.iter().map(|a| a.name.as_str()))
             .chain(self.edition.cover_artists.iter().map(String::as_str));
-        if names.into_iter().any(|n| n.trim().is_empty()) {
+        let names: Vec<&str> = names.collect();
+        if names.iter().any(|n| n.trim().is_empty()) {
             problem("a name in a list is blank");
+        }
+        // MyLongboxDB would keep it as one name holding the mark, which
+        // its search then finds beside each real one; the export never
+        // hides a separator inside a name.
+        if names.iter().any(|n| n.contains([';', '|'])) {
+            problem("a name in a list holds a ; or |, which separate names");
         }
         if self.category == Category::CollectedEdition
             && (self.copy.grade.is_some() || self.copy.grade_type.is_some())
@@ -446,6 +453,23 @@ mod tests {
             assert_eq!(problems.len(), 1, "{word}: {problems:?}");
             assert!(problems[0].contains(word), "{word}: {problems:?}");
         }
+    }
+
+    #[test]
+    fn a_name_holding_a_separator_is_refused() {
+        for name in ["Jack Kirby; John Romita", "Hulk | Thing"] {
+            let mut book = comic();
+            book.edition.cover_artists.push(name.into());
+            let problems = book.problems();
+            assert_eq!(problems.len(), 1, "{name}: {problems:?}");
+            assert!(problems[0].contains("separate names"), "{problems:?}");
+        }
+        let mut book = comic();
+        book.issue.characters.push(Appearance {
+            name: "Cloak; Dagger".into(),
+            first: true,
+        });
+        assert_eq!(book.problems().len(), 1);
     }
 
     #[test]

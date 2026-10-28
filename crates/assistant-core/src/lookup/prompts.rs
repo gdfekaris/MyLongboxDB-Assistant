@@ -5,7 +5,7 @@
 use super::fields::FIELDS;
 
 /// Raised with every change to the texts below.
-pub const PROMPT_VERSION: &str = "2026-10-26.7";
+pub const PROMPT_VERSION: &str = "2026-10-28.1";
 
 /// The read step, for photos: what is printed on the covers, and nothing
 /// looked up or remembered. The items to report follow it.
@@ -78,6 +78,9 @@ give the one credited first. The cover is the exception: its artists \
 are everyone who drew it, its penciller and its inker both.
 - For an issue with several stories, such as an anthology or a flip \
 book, report the lead story's title, credits, and characters only.
+- Give each creator, character, and team as an entry of its own, one \
+name to an entry, never two joined by and, &, a comma, or a slash: \
+Jack Kirby and John Romita as two cover artists, not one.
 - Name each creator as the issue credited them at the time. Where a \
 source gives a later name beside the credited one, as in Christopher \
 Priest [as Jim Owsley], use the credited name, Jim Owsley.
@@ -194,7 +197,9 @@ this very issue, such as a famous cover's artist. Its confidence is \
 high only when you are sure of it, and you leave it blank when you are \
 not.
 - Credits, characters, teams, and story arcs: only those the notes name \
-with a source, or that you know well, citing your own knowledge. part is the story arc part number, or empty. Cover \
+with a source, or that you know well, citing your own knowledge. One \
+name to an entry: two cover artists are two credits, never one joined \
+by and, &, a comma, or a slash. part is the story arc part number, or empty. Cover \
 artist credits are the standard cover's artists; the artist of a \
 variant the owner has goes in variant_cover_artists instead.
 - Sources titled Your cover photo are what the owner's own cover shows. \

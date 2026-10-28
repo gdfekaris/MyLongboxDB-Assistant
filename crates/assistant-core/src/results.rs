@@ -15,7 +15,8 @@ use serde::{Deserialize, Serialize};
 use crate::issue_number::IssueNumber;
 use crate::lines::BookQuery;
 use crate::lookup::{
-    Candidate, Detail, Draft, Entry, Identity, Source, Value, check, names, spec, without_repeats,
+    Candidate, Detail, Draft, Entry, Identity, NameList, Source, Value, check, spec, split_names,
+    split_note, without_repeats,
 };
 use crate::model::{Confidence, CopyInfo, Grade, GradeType, Jpeg, Role};
 
@@ -335,24 +336,34 @@ fn clean_lines(text: &str) -> String {
 fn entries(
     saved: Vec<SavedEntry>,
     sources: usize,
+    kind: NameList,
     detail: impl Fn(&SavedEntry) -> Option<Detail>,
 ) -> Vec<Entry> {
     // Books looked up before names were split may hold several in one.
+    // One the lookup already held whole, such as a team called Hawk and
+    // Dove, keeps the tick the owner gave it.
     let mut list: Vec<Entry> = saved
         .into_iter()
         .filter_map(|e| {
             let detail = detail(&e)?;
+            let text = clean(&e.name);
+            let (names, doubtful) = split_names(&text, kind);
+            let split = doubtful && names.len() > 1;
+            let note = if split {
+                split_note(&text, kind, names.len())
+            } else {
+                clean(&e.note)
+            };
             Some(
-                names(&e.name)
-                    .map(clean)
-                    .filter(|name| !name.is_empty())
+                names
+                    .into_iter()
                     .map(|name| Entry {
                         name,
                         detail,
                         source: e.source.filter(|s| *s < sources),
                         confidence: confidence(&e.confidence),
-                        note: clean(&e.note),
-                        accepted: e.accepted,
+                        note: note.clone(),
+                        accepted: e.accepted && !split,
                     })
                     .collect::<Vec<_>>(),
             )
@@ -437,14 +448,16 @@ fn book(saved: Saved, this_year: u16, photo: &dyn Fn(&str) -> Option<Photo>) -> 
             },
             identity,
             values,
-            credits: entries(saved.credits, n, |e| {
+            credits: entries(saved.credits, n, NameList::Creators, |e| {
                 Role::from_code(e.role.as_deref()?).map(Detail::Role)
             }),
-            characters: entries(saved.characters, n, |e| {
+            characters: entries(saved.characters, n, NameList::Characters, |e| {
                 e.first.map(Detail::FirstAppearance)
             }),
-            teams: entries(saved.teams, n, |e| e.first.map(Detail::FirstAppearance)),
-            story_arcs: entries(saved.story_arcs, n, |e| {
+            teams: entries(saved.teams, n, NameList::Teams, |e| {
+                e.first.map(Detail::FirstAppearance)
+            }),
+            story_arcs: entries(saved.story_arcs, n, NameList::StoryArcs, |e| {
                 Some(Detail::Part(e.part.filter(|p| *p >= 1)))
             }),
             sources,
