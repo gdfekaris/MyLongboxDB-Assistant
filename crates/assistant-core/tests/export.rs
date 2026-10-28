@@ -199,8 +199,14 @@ fn books() -> Vec<Book> {
     french.issue.number = number("½");
     french.issue.characters = vec![seen("Homme de Fer", false)];
 
+    // Typed without its volume, as the owner may type one book of a
+    // series and not another.
+    let mut no_volume = robot_tales("2");
+    no_volume.series.volume = None;
+
     vec![
         first, variant, newsstand, minus_one, annual, relaunch, magazine, omnibus, french,
+        no_volume,
     ]
 }
 
@@ -274,6 +280,10 @@ fn books_that_share_a_series_issue_or_edition_share_its_id() {
     assert_eq!(id(0, "Series ID"), id(4, "Series ID"));
     // A relaunch with its own start year and volume is another series.
     assert_ne!(id(0, "Series ID"), id(5, "Series ID"));
+    // A book without its volume joins the series the others name, and
+    // its volume is still not written.
+    assert_eq!(id(0, "Series ID"), id(9, "Series ID"));
+    assert_eq!(rows[9]["Volume"], "");
     let copies: std::collections::HashSet<_> = (0..rows.len()).map(|n| id(n, "Copy ID")).collect();
     assert_eq!(copies.len(), rows.len());
 }
@@ -341,6 +351,53 @@ fn a_book_mylongboxdb_would_refuse_stops_the_export() {
         other => panic!("{other:?}"),
     }
     assert!(out.into_inner().is_empty());
+}
+
+#[test]
+fn a_book_without_a_volume_joins_a_series_only_where_one_is_named() {
+    let ids = |volumes: &[Option<u32>]| -> Vec<String> {
+        let books: Vec<Book> = volumes
+            .iter()
+            .enumerate()
+            .map(|(n, volume)| {
+                let mut book = robot_tales(&(n + 1).to_string());
+                book.series.volume = *volume;
+                book
+            })
+            .collect();
+        let mut out = Cursor::new(Vec::new());
+        write_export(&books, &mut out).unwrap();
+        let mut archive = zip::ZipArchive::new(Cursor::new(out.into_inner())).unwrap();
+        let mut csv = Vec::new();
+        archive
+            .by_name("collection.csv")
+            .unwrap()
+            .read_to_end(&mut csv)
+            .unwrap();
+        let mut reader = csv::Reader::from_reader(csv.as_slice());
+        let at = reader
+            .headers()
+            .unwrap()
+            .iter()
+            .position(|h| h == "Series ID")
+            .unwrap();
+        reader
+            .records()
+            .map(|r| r.unwrap()[at].to_owned())
+            .collect()
+    };
+    // Whichever comes first.
+    let one = ids(&[None, Some(1), None]);
+    assert!(one.iter().all(|id| *id == one[0]), "{one:?}");
+    // None named: one series, as before.
+    let none = ids(&[None, None]);
+    assert_eq!(none[0], none[1]);
+    // Two named: which one it belongs to is the owner's to say, so it
+    // stays apart from both.
+    let two = ids(&[Some(1), Some(2), None]);
+    assert_ne!(two[0], two[1]);
+    assert_ne!(two[2], two[0]);
+    assert_ne!(two[2], two[1]);
 }
 
 /// For CI's check against MyLongboxDB's own import.

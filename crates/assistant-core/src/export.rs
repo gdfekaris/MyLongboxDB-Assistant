@@ -300,18 +300,39 @@ type IssueKey = (SeriesKey, String);
 type EditionKey = (IssueKey, String, Option<u32>, Option<&'static str>);
 
 /// The ids of each book's row: copy, edition, issue, and series.
+///
+/// A book with no volume shares the series of the others of its name
+/// and start year when they give one volume between them. MyLongboxDB
+/// keeps apart series a file gives different ids and volumes, as its own
+/// export of two lookalike series does, so with an id of its own the
+/// book would start a series without a volume rather than join the one
+/// the owner has. Its Volume cell stays blank: the volume is not guessed.
 fn ids(books: &[Book]) -> Vec<[Uuid; 4]> {
+    let mut volumes: HashMap<(String, Option<u16>), Vec<u32>> = HashMap::new();
+    for book in books {
+        if let Some(volume) = book.series.volume {
+            let stated = volumes
+                .entry((folded(&book.series.name), book.series.start_year))
+                .or_default();
+            if !stated.contains(&volume) {
+                stated.push(volume);
+            }
+        }
+    }
     let mut series: HashMap<SeriesKey, Uuid> = HashMap::new();
     let mut issues: HashMap<IssueKey, Uuid> = HashMap::new();
     let mut editions: HashMap<EditionKey, Uuid> = HashMap::new();
     books
         .iter()
         .map(|book| {
-            let series_key = (
-                folded(&book.series.name),
-                book.series.start_year,
-                book.series.volume,
-            );
+            let (name, start_year) = (folded(&book.series.name), book.series.start_year);
+            let volume = book.series.volume.or_else(|| {
+                match volumes.get(&(name.clone(), start_year)).map(Vec::as_slice) {
+                    Some(&[only]) => Some(only),
+                    _ => None,
+                }
+            });
+            let series_key = (name, start_year, volume);
             let series_id = *series
                 .entry(series_key.clone())
                 .or_insert_with(Uuid::new_v4);
