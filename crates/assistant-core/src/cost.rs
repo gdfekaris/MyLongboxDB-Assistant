@@ -6,7 +6,7 @@ use crate::money::Picodollars;
 
 /// When the Anthropic prices below were last checked against Anthropic's
 /// published prices. Its API does not report them.
-pub const ANTHROPIC_PRICES_AS_OF: &str = "2026-10-27";
+pub const ANTHROPIC_PRICES_AS_OF: &str = "2026-10-28";
 
 /// One web search, as Anthropic charges for it: $10 per 1,000.
 pub const ANTHROPIC_SEARCH: Picodollars = Picodollars(10_000_000_000);
