@@ -152,6 +152,18 @@ impl Run {
         self.cancel.store(true, Ordering::Relaxed);
     }
 
+    /// How many books closing the app now would lose: those still
+    /// waiting or being looked up, none once the run has finished.
+    pub fn lost_if_closed(&self) -> usize {
+        if self.finished {
+            return 0;
+        }
+        self.status
+            .iter()
+            .filter(|s| matches!(s, Status::Waiting | Status::LookingUp))
+            .count()
+    }
+
     /// The books that failed or were not looked up, to try again.
     pub fn unfinished(&self) -> Vec<Book> {
         self.books
@@ -379,5 +391,29 @@ impl RunPage {
             .iter()
             .any(|s| matches!(s, Status::Failed(_) | Status::Skipped));
         self.retry.set_visible(run.finished && others);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use assistant_core::lines::parse_lines;
+
+    fn run(count: usize) -> Run {
+        let text: Vec<String> = (1..=count).map(|n| format!("Robot Tales #{n}")).collect();
+        let (queries, _) = parse_lines(&text.join("\n"), 2026);
+        Run::new(queries.into_iter().map(Book::line).collect())
+    }
+
+    #[test]
+    fn closing_loses_only_books_not_yet_looked_up() {
+        let mut run = run(3);
+        assert_eq!(run.lost_if_closed(), 3);
+        run.apply(Event::Started(0));
+        assert_eq!(run.lost_if_closed(), 3);
+        run.apply(Event::Skipped(1));
+        assert_eq!(run.lost_if_closed(), 2);
+        run.finish(&Summary::default());
+        assert_eq!(run.lost_if_closed(), 0);
     }
 }

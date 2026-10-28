@@ -43,6 +43,10 @@ pub enum AppMsg {
     Saved(Result<ApiKeys, KeyFileError>, Config),
     Unlock,
     Unlocked(Result<ApiKeys, KeyFileError>),
+    /// The window was asked to close, and whether the owner confirmed
+    /// closing during a run.
+    CloseRequested,
+    CloseConfirmed,
     Lock,
     /// The owner pressed a key or clicked.
     Touch,
@@ -113,6 +117,8 @@ impl std::fmt::Debug for AppMsg {
             Self::Saved(..) => "Saved",
             Self::Unlock => "Unlock",
             Self::Unlocked(_) => "Unlocked",
+            Self::CloseRequested => "CloseRequested",
+            Self::CloseConfirmed => "CloseConfirmed",
             Self::Lock => "Lock",
             Self::Touch => "Touch",
             Self::Tick => "Tick",
@@ -178,6 +184,9 @@ pub struct App {
     /// Whether the books kept from before have been pointed out, which
     /// happens once, on the first work page shown.
     told_waiting: Cell<bool>,
+    /// Set once the window may close; until then closing it asks the
+    /// update first, which asks the owner during a run.
+    closing: Rc<Cell<bool>>,
     sender: ComponentSender<Self>,
 }
 
@@ -381,6 +390,51 @@ impl App {
                 }
             },
         );
+    }
+
+    /// Asks before closing while `remaining` books are still to be looked
+    /// up, as they would be lost.
+    fn confirm_close(&self, remaining: usize) {
+        let body = if remaining == 1 {
+            gettext(
+                "One book is still being looked up. It is lost if you close now, with what its \
+                 lookup has cost so far. Books already looked up are kept for review.",
+            )
+        } else {
+            gettext_f(
+                "{count} books are still waiting or being looked up. They are lost if you close \
+                 now, with what the lookup under way has cost so far. Books already looked up \
+                 are kept for review.",
+                &[("count", &remaining.to_string())],
+            )
+        };
+        let dialog = adw::AlertDialog::builder()
+            .heading(gettext("Stop Looking Up?"))
+            .body(body)
+            .close_response("cancel")
+            .default_response("cancel")
+            .build();
+        dialog.add_responses(&[
+            ("cancel", &gettext("_Keep Looking Up")),
+            ("close", &gettext("_Close Anyway")),
+        ]);
+        dialog.set_response_appearance("close", adw::ResponseAppearance::Destructive);
+        let sender = self.sender.clone();
+        dialog.choose(
+            Some(&self.window),
+            None::<&gio::Cancellable>,
+            move |response| {
+                if response == "close" {
+                    sender.input(AppMsg::CloseConfirmed);
+                }
+            },
+        );
+    }
+
+    /// Closes the window without asking again.
+    fn close_now(&self) {
+        self.closing.set(true);
+        self.window.close();
     }
 
     fn confirm_discard(&self, index: usize) {
@@ -1158,6 +1212,21 @@ impl SimpleComponent for App {
         toasts.set_child(Some(&content));
         window.set_content(Some(&toasts));
 
+        // Closing during a run would lose the books not yet looked up, so
+        // the update decides whether to ask first.
+        let closing = Rc::new(Cell::new(false));
+        {
+            let (sender, closing) = (sender.clone(), closing.clone());
+            window.connect_close_request(move |_| {
+                if closing.get() {
+                    glib::Propagation::Proceed
+                } else {
+                    sender.input(AppMsg::CloseRequested);
+                    glib::Propagation::Stop
+                }
+            });
+        }
+
         // Keys and clicks anywhere in the window count as use.
         let keys = gtk::EventControllerKey::new();
         keys.set_propagation_phase(gtk::PropagationPhase::Capture);
@@ -1281,6 +1350,7 @@ impl SimpleComponent for App {
             importing: None,
             toasts,
             told_waiting: Cell::new(false),
+            closing,
             sender,
         };
         model.action("lock", || AppMsg::Lock);
@@ -1383,6 +1453,16 @@ impl SimpleComponent for App {
                 self.unlock.busy(false);
                 self.unlock.show_problem(Some(&error_text(&e)));
                 self.unlock.entry.grab_focus();
+            }
+            AppMsg::CloseRequested => match self.run.as_ref().map_or(0, Run::lost_if_closed) {
+                0 => self.close_now(),
+                lost => self.confirm_close(lost),
+            },
+            AppMsg::CloseConfirmed => {
+                if let Some(run) = &self.run {
+                    run.cancel();
+                }
+                self.close_now();
             }
             AppMsg::Lock => {
                 self.session.lock();
