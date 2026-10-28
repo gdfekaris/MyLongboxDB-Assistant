@@ -33,7 +33,7 @@ dependencies = [
 
 [[package]]
 name = "assistant-app"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "assistant-core",
  "assistant-gcd",
@@ -48,7 +48,7 @@ dependencies = [
 
 [[package]]
 name = "assistant-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "csv",
  "proptest",
@@ -60,7 +60,7 @@ dependencies = [
 
 [[package]]
 name = "assistant-gcd"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "assistant-core",
  "rusqlite",
@@ -69,7 +69,7 @@ dependencies = [
 
 [[package]]
 name = "assistant-keys"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "argon2",
  "chacha20poly1305",
@@ -80,7 +80,7 @@ dependencies = [
 
 [[package]]
 name = "assistant-media"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "assistant-sandbox",
  "image",
@@ -90,7 +90,7 @@ dependencies = [
 
 [[package]]
 name = "assistant-net"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "assistant-core",
  "assistant-keys",
@@ -104,7 +104,7 @@ dependencies = [
 
 [[package]]
 name = "assistant-sandbox"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "assistant-core",
  "assistant-keys",

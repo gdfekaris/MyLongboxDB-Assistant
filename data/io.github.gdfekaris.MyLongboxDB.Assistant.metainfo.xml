@@ -39,6 +39,18 @@
   </branding>
 
   <releases>
+    <release version="0.4.0" date="2026-10-28">
+      <description>
+        <p>Cleaner imports, larger photos, and nothing lost by closing.</p>
+        <ul>
+          <li>Every creator, character, and team goes into the export as one name, so MyLongboxDB's search finds each on its own</li>
+          <li>A book typed without its volume joins the series the rest of its export names, rather than starting a series of its own</li>
+          <li>Cover photos are larger, and Add Books names each Front and Back</li>
+          <li>On opening, the app says how many looked-up books are waiting for review</li>
+          <li>Closing the app while books are being looked up asks first</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.3.0" date="2026-10-27">
       <description>
         <p>Drag photos in, and one name per entry in the export.</p>
