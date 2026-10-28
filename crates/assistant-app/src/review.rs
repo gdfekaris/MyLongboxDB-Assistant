@@ -20,9 +20,9 @@ use crate::i18n::{gettext, gettext_f};
 use crate::photos;
 
 /// The size of a book's thumbnail in the list.
-const THUMBNAIL: i32 = 48;
+const THUMBNAIL: i32 = 96;
 /// The longest edge of a photo on a book's page.
-const PHOTO_EDGE: u32 = 480;
+const PHOTO_EDGE: u32 = 640;
 
 /// One of a book's lists.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -471,7 +471,7 @@ fn book_content(index: usize, book: &ReviewBook, emit: &Emit) -> gtk::Box {
         let picture = gtk::Picture::builder()
             .paintable(&texture)
             .content_fit(gtk::ContentFit::Contain)
-            .height_request(240)
+            .height_request(320)
             .hexpand(true)
             .alternative_text(&label)
             .build();
@@ -758,7 +758,11 @@ impl ReviewPage {
                     .entry(front.name().to_owned())
                     .or_insert_with(|| photos::kept(&front.jpeg, THUMBNAIL as u32 * 2))
                     .clone();
-                let image = gtk::Image::builder().pixel_size(THUMBNAIL).build();
+                let image = gtk::Image::builder()
+                    .pixel_size(THUMBNAIL)
+                    .margin_top(6)
+                    .margin_bottom(6)
+                    .build();
                 image.set_paintable(texture.as_ref());
                 row.add_prefix(&image);
             }

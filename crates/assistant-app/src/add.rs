@@ -15,8 +15,9 @@ use crate::i18n::{gettext, gettext_f};
 use crate::photo_editor;
 use crate::photos::{self, Picked};
 
-/// The size of a photo's thumbnail in the list.
-const THUMBNAIL: i32 = 56;
+/// The size of a photo's thumbnail in the list, large enough to tell a
+/// front cover from a back at a glance.
+const THUMBNAIL: i32 = 120;
 /// The longest edge of the picture the editor shows.
 const EDITOR_EDGE: u32 = 1200;
 
@@ -540,7 +541,8 @@ impl AddPage {
             .build();
         row.set_use_markup(false);
         // Front then back, each in the same square whatever its shape, so
-        // the names line up.
+        // the names line up, and each named, as a back can look like a
+        // front.
         let thumbnails = gtk::Box::builder()
             .spacing(6)
             .margin_top(6)
@@ -553,6 +555,21 @@ impl AddPage {
             if let Some(texture) = photos::texture_of(&picked.thumbnail) {
                 image.set_paintable(Some(&texture));
             }
+            let side = gtk::Box::builder()
+                .orientation(gtk::Orientation::Vertical)
+                .spacing(4)
+                .build();
+            side.append(&image);
+            side.append(
+                &gtk::Label::builder()
+                    .label(if back {
+                        gettext("Back")
+                    } else {
+                        gettext("Front")
+                    })
+                    .css_classes(["caption", "dim-label"])
+                    .build(),
+            );
             // A photo is edited by choosing it.
             let tip = if back {
                 gettext("Edit Back Cover")
@@ -560,7 +577,7 @@ impl AddPage {
                 gettext("Edit Front Cover")
             };
             let edit = gtk::Button::builder()
-                .child(&image)
+                .child(&side)
                 .tooltip_text(&tip)
                 .css_classes(["flat"])
                 .build();

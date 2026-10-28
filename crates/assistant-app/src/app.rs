@@ -1125,8 +1125,8 @@ impl SimpleComponent for App {
     fn init_root() -> Self::Root {
         adw::ApplicationWindow::builder()
             .title(gettext("MyLongboxDB Assistant"))
-            .default_width(760)
-            .default_height(620)
+            .default_width(820)
+            .default_height(700)
             .build()
     }
 

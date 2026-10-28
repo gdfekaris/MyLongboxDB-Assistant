@@ -13,8 +13,9 @@ use gtk::{gdk, glib};
 
 use crate::i18n::{gettext, gettext_f};
 
-/// The longest edge of a photo's thumbnail in the list.
-const THUMBNAIL_EDGE: u32 = 160;
+/// The longest edge of a photo's thumbnail in the list: twice the size
+/// it is shown at, so it stays sharp on a high-density screen.
+const THUMBNAIL_EDGE: u32 = 240;
 
 /// A photo read and ready to look up.
 #[derive(Clone)]
