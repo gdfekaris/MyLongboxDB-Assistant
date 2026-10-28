@@ -2,13 +2,19 @@
 //! MyLongboxDB's own import, as the owner's import wizard would, and
 //! fails unless every row is added, every photo is stored, and every
 //! cell the Assistant wrote comes back out of MyLongboxDB's export as it
-//! went in.
+//! went in. It then imports the export again into a collection that
+//! already has every name it gives, and fails unless each name joins the
+//! entry the collection has rather than adding one of its own.
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::io::Read;
 use std::process::ExitCode;
 
-use mylongbox_core::{CoverPhoto, Database, Date, ImportOutcome, ImportSettings, ImportSource};
+use mylongbox_core::{
+    BookEntry, Category, CharacterId, CoverPhoto, CreatorId, Database, Date, ImportOutcome,
+    ImportSettings, ImportSource, IssueNumber, LookupId, Role, SeriesChoice, StoryArcId, TeamId,
+    split_list,
+};
 
 /// Columns whose cells MyLongboxDB fills itself, or writes otherwise.
 const SKIPPED: [&str; 4] = ["Date Added", "Front Photo", "Back Photo", "Signature Photo"];
@@ -68,6 +74,164 @@ const LISTS: [&str; 16] = [
     "Story Arcs",
     "Variant Cover Artists",
 ];
+
+/// The columns naming creators.
+const CREATORS: [&str; 11] = [
+    "Writers",
+    "Artists",
+    "Pencillers",
+    "Inkers",
+    "Colorists",
+    "Letterers",
+    "Cover Artists",
+    "Editors",
+    "Article Writers",
+    "Interviews",
+    "Variant Cover Artists",
+];
+
+/// The names each list of the collection is given by the rows, as
+/// MyLongboxDB's import reads them: creators, characters, teams, and
+/// story arcs.
+fn named(rows: &HashMap<String, HashMap<String, String>>) -> [BTreeSet<String>; 4] {
+    let mut lists: [BTreeSet<String>; 4] = Default::default();
+    let mut add = |list: usize, column: &str, row: &HashMap<String, String>| {
+        let cell = row.get(column).map_or("", |c| c.trim());
+        // The mark export puts before what a spreadsheet would take for
+        // a formula, which import takes off.
+        let cell = cell
+            .strip_prefix('\'')
+            .filter(|rest| rest.starts_with(['=', '+', '-', '@', '\t', '\r', '\'']))
+            .unwrap_or(cell);
+        for item in split_list(cell, ';') {
+            let item = match list {
+                // An arc's part is not part of its name.
+                3 => item
+                    .rsplit_once(" (part ")
+                    .filter(|(_, n)| n.ends_with(')'))
+                    .map_or(item.as_str(), |(name, _)| name)
+                    .to_owned(),
+                _ => item,
+            };
+            if !item.trim().is_empty() {
+                lists[list].insert(item.trim().to_owned());
+            }
+        }
+    };
+    for row in rows.values() {
+        for column in CREATORS {
+            add(0, column, row);
+        }
+        add(1, "Characters", row);
+        add(2, "Teams", row);
+        add(3, "Story Arcs", row);
+    }
+    lists
+}
+
+/// The names of a list, folded as MyLongboxDB compares them.
+fn entries<I: LookupId>(db: &Database) -> Result<BTreeSet<String>, String> {
+    Ok(db
+        .list_lookups::<I>()
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .map(|l| l.name.to_ascii_lowercase())
+        .collect())
+}
+
+/// Whether each name the export gives is one name, and joins the entry
+/// a collection that already has it keeps. The collection is made as an
+/// owner typing one name to a row of MyLongboxDB's form would make it:
+/// each name in capitals, so only a match that ignores case finds it,
+/// and the first creator only as another creator's alternate name.
+fn names_join(
+    path: &std::path::Path,
+    settings: &ImportSettings,
+    written: &HashMap<String, HashMap<String, String>>,
+) -> Result<Vec<String>, String> {
+    let [creators, characters, teams, arcs] = named(written);
+    let mut problems = Vec::new();
+    for name in creators.iter().chain(&characters).chain(&teams).chain(&arcs) {
+        if name.contains([';', '|']) {
+            problems.push(format!("{name:?} is one name holding a separator"));
+        }
+    }
+
+    let db = Database::open_in_memory().map_err(|e| e.to_string())?;
+    let upper = |names: &BTreeSet<String>| -> Vec<String> {
+        names.iter().map(|n| n.to_ascii_uppercase()).collect()
+    };
+    let aliased = creators.iter().next().cloned();
+    let mut seed = BookEntry::new(
+        Category::Comic,
+        SeriesChoice::New {
+            name: "Contract Seed".into(),
+            start_year: Some(1900),
+            volume: None,
+            publisher: None,
+            imprint: String::new(),
+            magazine_format: None,
+            black_and_white: None,
+        },
+        Some(IssueNumber::new("1").map_err(|e| e.to_string())?),
+    );
+    seed.credits = upper(&creators)
+        .into_iter()
+        .skip(usize::from(aliased.is_some()))
+        .map(|n| (n, Role::Writer))
+        .collect();
+    seed.credits.push(("Contract Seed Creator".into(), Role::Editor));
+    seed.characters = upper(&characters).into_iter().map(|n| (n, false)).collect();
+    seed.teams = upper(&teams).into_iter().map(|n| (n, false)).collect();
+    seed.story_arcs = upper(&arcs).into_iter().map(|n| (n, None)).collect();
+    db.add_book(&seed).map_err(|e| e.to_string())?;
+    if let Some(alias) = &aliased {
+        let target = db
+            .list_lookups::<CreatorId>()
+            .map_err(|e| e.to_string())?
+            .into_iter()
+            .find(|l| l.name == "Contract Seed Creator")
+            .ok_or("the seeded creator is missing")?;
+        db.add_alias(target.id, alias).map_err(|e| e.to_string())?;
+    }
+    let before = [
+        entries::<CreatorId>(&db)?,
+        entries::<CharacterId>(&db)?,
+        entries::<TeamId>(&db)?,
+        entries::<StoryArcId>(&db)?,
+    ];
+
+    let mut source = ImportSource::open(path).map_err(|e| e.to_string())?;
+    let report = db
+        .import(&mut source, settings, &prepare)
+        .map_err(|e| e.to_string())?;
+    for row in &report.rows {
+        if row.outcome != ImportOutcome::Added {
+            problems.push(format!(
+                "into a collection with its names, line {} {}: {:?}",
+                row.line, row.label, row.outcome
+            ));
+        }
+    }
+    let after = [
+        entries::<CreatorId>(&db)?,
+        entries::<CharacterId>(&db)?,
+        entries::<TeamId>(&db)?,
+        entries::<StoryArcId>(&db)?,
+    ];
+    for ((list, before), after) in ["creator", "character", "team", "story arc"]
+        .iter()
+        .zip(&before)
+        .zip(&after)
+    {
+        for added in after.difference(before) {
+            problems.push(format!(
+                "the import added the {list} {added:?}, which the collection already had"
+            ));
+        }
+    }
+    Ok(problems)
+}
 
 /// A list cell's items, in order, with escapes kept so an escaped
 /// separator is not split on.
@@ -175,6 +339,7 @@ fn check(path: &std::path::Path) -> Result<usize, Vec<String>> {
             }
         }
     }
+    problems.extend(names_join(path, &settings, &written).unwrap_or_else(|e| vec![e]));
     let photos = archive
         .file_names()
         .filter(|n| n.as_ref().is_ok_and(|n| n.starts_with("images/")))
