@@ -1,6 +1,7 @@
 //! The window: setting up, unlocking, adding books, and running their
 //! lookups, and holding the unlocked keys under the session's rules.
 
+use std::cell::Cell;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
@@ -174,6 +175,9 @@ pub struct App {
     /// An import of a GCD dump under way, with its progress dialog.
     importing: Option<catalogue::Progress>,
     toasts: adw::ToastOverlay,
+    /// Whether the books kept from before have been pointed out, which
+    /// happens once, on the first work page shown.
+    told_waiting: Cell<bool>,
     sender: ComponentSender<Self>,
 }
 
@@ -216,6 +220,32 @@ impl App {
             _ => self.stack.set_visible_child_name("add"),
         }
         self.setup_holder.set_child(None::<&gtk::Widget>);
+        if !self.told_waiting.replace(true) && self.view == View::Add {
+            self.tell_waiting();
+        }
+    }
+
+    /// Says how many looked-up books were kept from before, as the
+    /// Review button alone is easy to miss on opening the app.
+    fn tell_waiting(&self) {
+        let count = self.results.len();
+        let text = match count {
+            0 => return,
+            1 => gettext("1 looked-up book from before is waiting for review"),
+            _ => gettext_f(
+                "{count} looked-up books from before are waiting for review",
+                &[("count", &count.to_string())],
+            ),
+        };
+        let toast = adw::Toast::builder()
+            .title(text)
+            .use_markup(false)
+            .button_label(gettext("Review"))
+            .timeout(10)
+            .build();
+        let sender = self.sender.clone();
+        toast.connect_button_clicked(move |_| sender.input(AppMsg::ShowReview));
+        self.toasts.add_toast(toast);
     }
 
     /// Works out the pending books' cost, then asks the owner to confirm.
@@ -1250,6 +1280,7 @@ impl SimpleComponent for App {
             catalog,
             importing: None,
             toasts,
+            told_waiting: Cell::new(false),
             sender,
         };
         model.action("lock", || AppMsg::Lock);
@@ -1495,6 +1526,11 @@ impl SimpleComponent for App {
                 }
             }
             AppMsg::ShowReview => {
+                // The notice of books kept from before can still be
+                // showing after the app locks.
+                if !self.session.is_unlocked() {
+                    return;
+                }
                 if self.run.as_ref().is_some_and(|r| r.finished) {
                     self.run = None;
                     self.add.clear();
