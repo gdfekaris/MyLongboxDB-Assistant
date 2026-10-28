@@ -3,10 +3,11 @@
 //! fails unless every row is added, every photo is stored, and every
 //! cell the Assistant wrote comes back out of MyLongboxDB's export as it
 //! went in. It then imports the export again into a collection that
-//! already has every name it gives, and fails unless each name joins the
-//! entry the collection has rather than adding one of its own.
+//! already has every series and name it gives, and fails unless each
+//! row joins the series and each name the entry the collection has,
+//! rather than adding one of its own.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::Read;
 use std::process::ExitCode;
 
@@ -129,6 +130,46 @@ fn named(rows: &HashMap<String, HashMap<String, String>>) -> [BTreeSet<String>; 
     lists
 }
 
+/// The series the rows name, by name and start year as MyLongboxDB
+/// compares them: the name as first written, the category, and the
+/// volumes the rows state.
+type NamedSeries = BTreeMap<(String, Option<u16>), (String, Category, BTreeSet<u32>)>;
+
+fn series_named(rows: &HashMap<String, HashMap<String, String>>) -> NamedSeries {
+    let mut series = NamedSeries::new();
+    for row in rows.values() {
+        let cell = |column: &str| row.get(column).map_or("", |c| c.trim());
+        let name = cell("Series");
+        let Some(category) = Category::from_code(cell("Category")) else {
+            continue;
+        };
+        let start_year = cell("Start Year").parse().ok();
+        let folded = name
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ")
+            .to_ascii_lowercase();
+        let entry = series
+            .entry((folded, start_year))
+            .or_insert_with(|| (name.to_owned(), category, BTreeSet::new()));
+        if let Ok(volume) = cell("Volume").parse() {
+            entry.2.insert(volume);
+        }
+    }
+    series
+}
+
+/// The Series IDs of the collection's copies.
+fn series_ids(db: &Database) -> Result<BTreeSet<String>, String> {
+    let mut csv = Vec::new();
+    db.export_csv(None, &mut csv, false)
+        .map_err(|e| e.to_string())?;
+    Ok(rows(&csv)?
+        .into_values()
+        .map(|row| row["Series ID"].clone())
+        .collect())
+}
+
 /// The names of a list, folded as MyLongboxDB compares them.
 fn entries<I: LookupId>(db: &Database) -> Result<BTreeSet<String>, String> {
     Ok(db
@@ -139,12 +180,15 @@ fn entries<I: LookupId>(db: &Database) -> Result<BTreeSet<String>, String> {
         .collect())
 }
 
-/// Whether each name the export gives is one name, and joins the entry
-/// a collection that already has it keeps. The collection is made as an
-/// owner typing one name to a row of MyLongboxDB's form would make it:
-/// each name in capitals, so only a match that ignores case finds it,
-/// and the first creator only as another creator's alternate name.
-fn names_join(
+/// Whether each name the export gives is one name, and each row and name
+/// joins what a collection that already has them keeps. The collection
+/// is made as an owner typing into MyLongboxDB's form would make it: one
+/// name to a row, each in capitals, so only a match that ignores case
+/// finds it, and the first creator only as another creator's alternate
+/// name; and each series with the volume its rows state, or none where
+/// they state none, so a row left without its volume must join the
+/// series of its name and start year.
+fn joins_the_collection(
     path: &std::path::Path,
     settings: &ImportSettings,
     written: &HashMap<String, HashMap<String, String>>,
@@ -185,6 +229,38 @@ fn names_join(
     seed.teams = upper(&teams).into_iter().map(|n| (n, false)).collect();
     seed.story_arcs = upper(&arcs).into_iter().map(|n| (n, None)).collect();
     db.add_book(&seed).map_err(|e| e.to_string())?;
+    for ((_, start_year), (name, category, volumes)) in series_named(written) {
+        let volumes: Vec<Option<u32>> = if volumes.is_empty() {
+            vec![None]
+        } else {
+            volumes.into_iter().map(Some).collect()
+        };
+        for volume in volumes {
+            // An issue no row names, so no row is taken for a copy
+            // already owned.
+            let number = match category {
+                Category::CollectedEdition => None,
+                Category::Comic | Category::Magazine => {
+                    Some(IssueNumber::new("999").map_err(|e| e.to_string())?)
+                }
+            };
+            let book = BookEntry::new(
+                category,
+                SeriesChoice::New {
+                    name: name.to_ascii_uppercase(),
+                    start_year,
+                    volume,
+                    publisher: None,
+                    imprint: String::new(),
+                    magazine_format: None,
+                    black_and_white: None,
+                },
+                number,
+            );
+            db.add_book(&book).map_err(|e| e.to_string())?;
+        }
+    }
+    let series_before = series_ids(&db)?;
     if let Some(alias) = &aliased {
         let target = db
             .list_lookups::<CreatorId>()
@@ -212,6 +288,12 @@ fn names_join(
                 row.line, row.label, row.outcome
             ));
         }
+    }
+    let started = series_ids(&db)?.len() - series_before.len();
+    if started > 0 {
+        problems.push(format!(
+            "the import started {started} series the collection already had"
+        ));
     }
     let after = [
         entries::<CreatorId>(&db)?,
@@ -339,7 +421,7 @@ fn check(path: &std::path::Path) -> Result<usize, Vec<String>> {
             }
         }
     }
-    problems.extend(names_join(path, &settings, &written).unwrap_or_else(|e| vec![e]));
+    problems.extend(joins_the_collection(path, &settings, &written).unwrap_or_else(|e| vec![e]));
     let photos = archive
         .file_names()
         .filter(|n| n.as_ref().is_ok_and(|n| n.starts_with("images/")))
