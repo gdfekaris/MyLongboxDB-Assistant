@@ -71,6 +71,9 @@ pub struct ReviewBook {
     /// Marked by the owner once they have looked the book over, to keep
     /// track of a long review; the export does not depend on it.
     pub reviewed: bool,
+    /// Kept apart by the owner from other copies of what the lookups
+    /// took for the same issue, so its issue facts are its own.
+    pub apart: bool,
     /// The owner's own grade of their copy, typed on the review page.
     pub copy: CopyInfo,
     pub front: Option<Photo>,
@@ -85,6 +88,7 @@ impl ReviewBook {
             draft,
             included,
             reviewed: false,
+            apart: false,
             copy: CopyInfo::default(),
             front: None,
             back: None,
@@ -136,6 +140,9 @@ struct Saved {
     /// Files from before books could be marked reviewed have none.
     #[serde(default)]
     reviewed: bool,
+    /// Files from before copies of one issue shared their facts have none.
+    #[serde(default)]
+    apart: bool,
     /// Files from before copies could be graded have none of these.
     #[serde(default)]
     grade: Option<String>,
@@ -258,6 +265,7 @@ pub fn to_json(books: &[ReviewBook]) -> String {
             Saved {
                 included: b.included,
                 reviewed: b.reviewed,
+                apart: b.apart,
                 grade: b.copy.grade.map(|g| g.to_string()),
                 grade_type: b.copy.grade_type.map(|g| g.code().to_owned()),
                 cert_number: b.copy.cert_number.clone(),
@@ -465,6 +473,7 @@ fn book(saved: Saved, this_year: u16, photo: &dyn Fn(&str) -> Option<Photo>) -> 
         },
         included,
         reviewed: saved.reviewed,
+        apart: saved.apart,
         // Checked as the review page checks what the owner types; a value
         // that does not read is dropped.
         copy: CopyInfo {

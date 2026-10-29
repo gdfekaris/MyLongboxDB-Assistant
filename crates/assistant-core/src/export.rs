@@ -355,6 +355,15 @@ fn ids(books: &[Book]) -> Vec<[Uuid; 4]> {
         .collect()
 }
 
+/// The Issue ID each book's row would have: copies of one issue share
+/// one.
+pub(crate) fn issue_ids(books: &[Book]) -> Vec<Uuid> {
+    ids(books)
+        .into_iter()
+        .map(|[_, _, issue, _]| issue)
+        .collect()
+}
+
 fn text<T: ToString>(value: Option<T>) -> String {
     value.map(|v| v.to_string()).unwrap_or_default()
 }
