@@ -1159,6 +1159,9 @@ fn series_from_cover(draft: &mut Draft, reading: &Reading) {
     }
 }
 
+/// What a variant found by a lookup notes as it waits for the owner.
+pub(crate) const VARIANT_NOTE: &str = "name it as your collection names variants";
+
 /// Variant names are the collection's own, more a habit than a rule, so
 /// one found waits for the owner to put it in their words.
 fn variant_name(draft: &mut Draft) {
@@ -1169,7 +1172,7 @@ fn variant_name(draft: &mut Draft) {
     {
         value.accepted = false;
         if value.note.is_empty() {
-            value.note = "name it as your collection names variants".into();
+            value.note = VARIANT_NOTE.into();
         }
     }
 }
@@ -1636,6 +1639,13 @@ fn known_issue(known: &Draft, this_year: u16) -> String {
         text.push_str(&format!(", {}", book.series.publisher));
     }
     text.push('\n');
+    if let Some(variant) = known.value("variant").filter(|v| !v.text.is_empty()) {
+        text.push_str(&format!(
+            "That copy's variant is {}. Where this copy's cover differs from it, \
+             its variant has another name.\n",
+            variant.text
+        ));
+    }
     text
 }
 

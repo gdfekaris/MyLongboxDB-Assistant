@@ -5,7 +5,7 @@
 use super::fields::FIELDS;
 
 /// Raised with every change to the texts below.
-pub const PROMPT_VERSION: &str = "2026-10-29.5";
+pub const PROMPT_VERSION: &str = "2026-10-29.6";
 
 /// The read step, for photos: what is printed on the covers, and nothing
 /// looked up or remembered. The items to report follow it.
@@ -171,6 +171,12 @@ original issue, its series and start year, with Facsimile as its variant. \
 Its release date and published date are the facsimile's own, never the \
 original's; leave its cover date and cover prices blank, and it is \
 never a key issue.
+- A special edition or other later edition reprinting one issue, such as \
+a store's, is catalogued as that issue too, its variant named by the \
+edition's name, such as Special edition, Spectral Comics exclusive. Its \
+published date is the edition's own; the issue's cover date and other \
+facts stay the original's. Its covers are told apart by what each shows, \
+seen in the photo, not by a shop's listing of another of them.
 - Where the cover prints no month, a book from 2000 on takes the month \
 it went on sale as its cover date. An older one takes the cover date \
 its indicia prints, or the month the Grand Comics Database gives in \

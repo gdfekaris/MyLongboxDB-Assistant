@@ -75,6 +75,7 @@ pub fn others(books: &[ReviewBook], index: usize, this_year: u16) -> Vec<usize> 
 /// of what the copy found. Doing it again changes nothing.
 pub fn share(books: &mut [ReviewBook], this_year: u16) {
     for group in groups(books, this_year) {
+        same_names(books, &group);
         let mut facts = books[group[0]].draft.clone();
         let newcomers: Vec<usize> = group[1..]
             .iter()
@@ -90,6 +91,48 @@ pub fn share(books: &mut [ReviewBook], this_year: u16) {
         for i in group {
             copy_facts(&facts, &mut books[i].draft);
         }
+    }
+}
+
+/// What a copy's variant waiting for the owner notes when another copy
+/// of its issue has a variant of the same name.
+const SAME_NAME: &str = "another copy has a variant of this name too: if their covers differ, name what tells them apart";
+
+/// Notes, on each copy's variant still waiting for the owner, that
+/// another copy's has the same name. MyLongboxDB takes copies with the
+/// same variant, printing, and distribution for one edition, so two
+/// covers named alike would become one there.
+fn same_names(books: &mut [ReviewBook], group: &[usize]) {
+    let edition = |b: &ReviewBook| {
+        let text = |key| {
+            b.draft
+                .value(key)
+                .map_or(String::new(), |v| folded(&v.text))
+        };
+        (text("variant"), text("printing"), text("distribution"))
+    };
+    let editions: Vec<_> = group.iter().map(|i| edition(&books[*i])).collect();
+    for (n, i) in group.iter().enumerate() {
+        let alike = editions
+            .iter()
+            .enumerate()
+            .any(|(m, e)| m != n && !e.0.is_empty() && *e == editions[n]);
+        let Some(variant) = books[*i]
+            .draft
+            .values
+            .iter_mut()
+            .find(|v| v.key == "variant" && !v.accepted)
+        else {
+            continue;
+        };
+        if !alike || variant.note.contains(SAME_NAME) {
+            continue;
+        }
+        variant.note = if variant.note.is_empty() || variant.note == crate::lookup::VARIANT_NOTE {
+            SAME_NAME.into()
+        } else {
+            format!("{}; {SAME_NAME}", variant.note)
+        };
     }
 }
 
@@ -469,5 +512,47 @@ mod tests {
         assert_eq!(text(&books[1], "story_title"), "Other title");
         let saved = crate::results::from_json(&crate::results::to_json(&books), YEAR).unwrap();
         assert!(saved[1].apart && !saved[0].apart);
+    }
+
+    #[test]
+    fn copies_whose_variants_share_a_name_are_noted() {
+        let mut books = vec![
+            copy("first", "direct", "Title", &[]),
+            copy("second", "direct", "Title", &[]),
+            copy("third", "direct", "Title", &[]),
+        ];
+        for (book, name) in books
+            .iter_mut()
+            .zip(["Okazaki cover", "okazaki  cover", "Foil cover"])
+        {
+            let mut variant = value("variant", name, 0);
+            variant.accepted = false;
+            variant.note = crate::lookup::VARIANT_NOTE.into();
+            book.draft.values.push(variant);
+        }
+        share(&mut books, YEAR);
+        let note = |b: &ReviewBook| b.draft.value("variant").unwrap().note.clone();
+        assert_eq!(note(&books[0]), SAME_NAME);
+        assert_eq!(note(&books[1]), SAME_NAME);
+        assert_eq!(note(&books[2]), crate::lookup::VARIANT_NOTE);
+        // One the owner ticked is theirs, and doing it again changes nothing.
+        books[1]
+            .draft
+            .values
+            .iter_mut()
+            .find(|v| v.key == "variant")
+            .unwrap()
+            .accepted = true;
+        books[1]
+            .draft
+            .values
+            .iter_mut()
+            .find(|v| v.key == "variant")
+            .unwrap()
+            .note
+            .clear();
+        let before = books.clone();
+        share(&mut books, YEAR);
+        assert_eq!(books, before);
     }
 }
