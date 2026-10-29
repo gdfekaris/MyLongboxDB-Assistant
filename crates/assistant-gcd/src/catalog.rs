@@ -16,8 +16,12 @@ use crate::keys::{barcode_key, number_key, series_key};
 const MAX_RECORDS: usize = 3;
 /// The most characters named in one story of a record.
 const MAX_CHARACTERS: usize = 30;
-/// The longest record given; a record of a long anthology is cut there.
-pub const MAX_RECORD: usize = 6_000;
+/// The longest record given. Room for every edition of an issue with
+/// sixty variants, as modern issues can have; a record longer still, of
+/// a long anthology say, loses its last stories.
+pub const MAX_RECORD: usize = 16_000;
+/// The most editions of one issue listed.
+const MAX_EDITIONS: usize = 120;
 /// The longest record given after the first: the others are only told
 /// apart from it, by their series and editions.
 const MAX_OTHER_RECORD: usize = 600;
@@ -75,6 +79,38 @@ fn pages(count: f64) -> String {
     } else {
         format!("{count}")
     }
+}
+
+/// Cuts `text` to at most `max` characters, marking where it was cut.
+fn cut(text: &mut String, max: usize) {
+    if text.chars().count() > max {
+        *text = text.chars().take(max.saturating_sub(1)).collect();
+        text.push('\u{2026}');
+    }
+}
+
+/// What an edition says, for the issue itself always, and for a variant
+/// unless it only repeats the issue.
+fn own<'a, T: PartialEq>(first: bool, this: &'a Option<T>, base: &Option<T>) -> Option<&'a T> {
+    this.as_ref().filter(|_| first || this != base)
+}
+
+/// One edition of an issue as the index holds it: the issue itself, or
+/// one of its variants.
+struct Edition {
+    id: i64,
+    number: Option<String>,
+    variant: Option<String>,
+    title: Option<String>,
+    printed: Option<String>,
+    key: Option<String>,
+    sale: Option<String>,
+    price: Option<String>,
+    pages: Option<f64>,
+    barcode: Option<String>,
+    isbn: Option<String>,
+    indicia: Option<String>,
+    notes: Option<String>,
 }
 
 /// One issue in the owner's GCD copy, written out for a lookup.
@@ -391,102 +427,9 @@ fn record(
     }
     text.push('\n');
 
-    // The issue and each of its editions: the issue itself is the first.
-    let mut stmt = conn.prepare(
-        "SELECT id, number, variant_name, title, publication_date, key_date, on_sale_date,
-                price, page_count, barcode, isbn, indicia_publisher, notes
-         FROM issue
-         WHERE id IN (SELECT ?1 UNION ALL SELECT id FROM issue WHERE variant_of = ?1)
-         ORDER BY variant_of IS NOT NULL, id LIMIT 40",
-    )?;
-    let editions = stmt
-        .query_map([id], |r| {
-            Ok((
-                r.get::<_, i64>(0)?,
-                r.get::<_, Option<String>>(1)?,
-                r.get::<_, Option<String>>(2)?,
-                r.get::<_, Option<String>>(3)?,
-                r.get::<_, Option<String>>(4)?,
-                r.get::<_, Option<String>>(5)?,
-                r.get::<_, Option<String>>(6)?,
-                r.get::<_, Option<String>>(7)?,
-                r.get::<_, Option<f64>>(8)?,
-                r.get::<_, Option<String>>(9)?,
-                r.get::<_, Option<String>>(10)?,
-                r.get::<_, Option<String>>(11)?,
-                r.get::<_, Option<String>>(12)?,
-            ))
-        })?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
-    let mut number = String::new();
-    let mut notes = String::new();
-    for (n, e) in editions.iter().enumerate() {
-        let (
-            eid,
-            num,
-            variant,
-            title,
-            printed,
-            key,
-            sale,
-            price,
-            pages_,
-            code,
-            isbn,
-            indicia,
-            note,
-        ) = e;
-        let mut line = Vec::new();
-        if n == 0 {
-            number = num.clone().unwrap_or_default();
-            let mut head = format!("Issue: #{number}");
-            if let Some(title) = title {
-                let _ = write!(head, ", titled \u{201c}{title}\u{201d}");
-            }
-            text.push_str(&head);
-            text.push('\n');
-            if let Some(note) = note {
-                notes.clone_from(note);
-            }
-        }
-        let label = match (n, variant) {
-            (0, Some(v)) => format!("Edition {v} (the issue itself)"),
-            (0, None) => "Edition: the issue itself".to_owned(),
-            (_, Some(v)) => format!("Edition {v}"),
-            (_, None) => "Another edition".to_owned(),
-        };
-        if let Some(printed) = printed {
-            line.push(format!("cover date as printed {printed}"));
-        }
-        if let Some(key) = key {
-            line.push(format!("catalogue date {}", key.trim_end_matches("-00")));
-        }
-        if let Some(sale) = sale {
-            line.push(format!("on sale {}", sale.trim_end_matches("-00")));
-        }
-        if let Some(price) = price {
-            line.push(format!("price {price}"));
-        }
-        if let Some(count) = pages_ {
-            line.push(format!("{} pages", pages(*count)));
-        }
-        if let Some(code) = code {
-            line.push(format!("barcode {code}"));
-        }
-        if let Some(isbn) = isbn {
-            line.push(format!("ISBN {isbn}"));
-        }
-        if let Some(indicia) = indicia {
-            line.push(format!("indicia publisher {indicia}"));
-        }
-        if matched == Some(*eid) {
-            line.push("its barcode is the one on the owner's cover".to_owned());
-        }
-        let _ = writeln!(text, "{label}: {}", line.join("; "));
-    }
-
-    // A story's credits, or with `of_issue` an issue's own.
-    let credits = |owner: i64, of_issue: bool| -> rusqlite::Result<String> {
+    // A story's credits, or with `of_issue` an issue's own; with
+    // `art_only`, its colorists and letterers left out.
+    let credits = |owner: i64, of_issue: bool, art_only: bool| -> rusqlite::Result<Vec<String>> {
         let mut stmt = conn.prepare_cached(if of_issue {
             "SELECT role, name, credited_as, detail, uncertain FROM credit
              WHERE issue_id = ?1 ORDER BY role, rowid LIMIT 60"
@@ -506,9 +449,12 @@ fn record(
         let mut parts = Vec::new();
         for row in rows {
             let (role, name, credited, detail, uncertain) = row?;
+            if art_only && matches!(role, Some(4 | 5)) {
+                continue;
+            }
             let mut part = format!("{}: {name}", credit_type(role));
             let mut notes = Vec::new();
-            if let Some(credited) = credited {
+            if let Some(credited) = credited.filter(|c| *c != name) {
                 notes.push(format!("credited as {credited}"));
             }
             if let Some(detail) = detail {
@@ -522,72 +468,199 @@ fn record(
             }
             parts.push(part);
         }
-        Ok(parts.join("; "))
+        Ok(parts)
+    };
+    // Who drew an edition's cover, as the GCD records a variant's own
+    // cover as a story of that edition. Its colorist and letterer are
+    // not its artists, and named beside them were taken for one.
+    let cover = |edition: i64| -> rusqlite::Result<Option<String>> {
+        let story: Option<(i64, Option<String>)> = conn
+            .prepare_cached(
+                "SELECT id, legacy FROM story WHERE issue_id = ?1 AND kind = 6
+                 ORDER BY seq, id LIMIT 1",
+            )?
+            .query_row([edition], |r| Ok((r.get(0)?, r.get(1)?)))
+            .optional()?;
+        let Some((story, legacy)) = story else {
+            return Ok(None);
+        };
+        let parts = credits(story, false, true)?;
+        Ok(if parts.is_empty() {
+            legacy
+        } else {
+            Some(parts.join(", "))
+        })
     };
 
-    let issue_credits = credits(id, true)?;
-    if !issue_credits.is_empty() {
-        let _ = writeln!(text, "Issue credits: {issue_credits}");
-    }
-    // The issue's stories, then the covers of its other editions, as a
-    // variant's own cover is recorded there.
+    // The issue and each of its editions, the issue itself first. Every
+    // edition is listed, however many variants the issue has, as which
+    // one the owner's copy is matters more than a long record's last
+    // stories; a variant repeats only what it does not share with the
+    // issue. The GCD files some editions as issues of their own, numbered
+    // as 82 [Collector's Edition] beside #82, and those are listed too.
+    let (series_id, key): (i64, String) = conn.query_row(
+        "SELECT series_id, number_key FROM issue WHERE id = ?1",
+        [id],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    // The keys that are this one, a space, and a bracket, as a backslash
+    // sorts just after the bracket.
+    let (from, to) = (format!("{key} ["), format!("{key} \\"));
     let mut stmt = conn.prepare(
-        "SELECT s.id, s.issue_id, s.seq, s.kind, s.title, s.feature, s.page_count, s.characters,
-                s.synopsis, s.legacy, i.variant_name
-         FROM story s JOIN issue i ON i.id = s.issue_id
-         WHERE s.issue_id IN (SELECT ?1 UNION ALL SELECT id FROM issue WHERE variant_of = ?1)
-             AND (s.issue_id = ?1 OR s.kind = 6)
-         ORDER BY s.issue_id != ?1, s.issue_id, s.seq, s.id LIMIT 40",
+        "SELECT id, number, variant_name, title, publication_date, key_date, on_sale_date,
+                price, page_count, barcode, isbn, indicia_publisher, notes
+         FROM issue
+         WHERE id IN (SELECT ?1 UNION ALL SELECT id FROM issue WHERE variant_of = ?1
+             UNION ALL SELECT id FROM issue WHERE series_id = ?2 AND number_key >= ?3
+                 AND number_key < ?4 AND variant_of IS NULL)
+         ORDER BY id != ?1, variant_of IS NULL, id LIMIT ?5",
+    )?;
+    let editions = stmt
+        .query_map(params![id, series_id, from, to, MAX_EDITIONS as i64], |r| {
+            Ok(Edition {
+                id: r.get(0)?,
+                number: r.get(1)?,
+                variant: r.get(2)?,
+                title: r.get(3)?,
+                printed: r.get(4)?,
+                key: r.get(5)?,
+                sale: r.get(6)?,
+                price: r.get(7)?,
+                pages: r.get(8)?,
+                barcode: r.get(9)?,
+                isbn: r.get(10)?,
+                indicia: r.get(11)?,
+                notes: r.get(12)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let mut number = String::new();
+    let mut notes = String::new();
+    for (n, e) in editions.iter().enumerate() {
+        let base = &editions[0];
+        let first = n == 0;
+        let mut line = Vec::new();
+        if first {
+            number = e.number.clone().unwrap_or_default();
+            let mut head = format!("Issue: #{number}");
+            if let Some(title) = &e.title {
+                let _ = write!(head, ", titled \u{201c}{title}\u{201d}");
+            }
+            text.push_str(&head);
+            text.push('\n');
+            if let Some(note) = &e.notes {
+                notes.clone_from(note);
+            }
+        }
+        let label = match (first, &e.variant) {
+            (true, Some(v)) => format!("Edition {v} (the issue itself)"),
+            (true, None) => "Edition: the issue itself".to_owned(),
+            (false, _) if e.number != base.number => {
+                let number = e.number.as_deref().unwrap_or_default();
+                let name = e.variant.as_deref().or_else(|| {
+                    number
+                        .split_once(" [")
+                        .and_then(|(_, rest)| rest.strip_suffix(']'))
+                });
+                match name {
+                    Some(v) => {
+                        format!("Edition {v} (catalogued as an issue of its own, #{number})")
+                    }
+                    None => {
+                        format!("Another edition (catalogued as an issue of its own, #{number})")
+                    }
+                }
+            }
+            (false, Some(v)) => format!("Edition {v}"),
+            (false, None) => "Another edition".to_owned(),
+        };
+        if let Some(printed) = own(first, &e.printed, &base.printed) {
+            line.push(format!("cover date as printed {printed}"));
+        }
+        if let Some(key) = own(first, &e.key, &base.key) {
+            line.push(format!("catalogue date {}", key.trim_end_matches("-00")));
+        }
+        if let Some(sale) = own(first, &e.sale, &base.sale) {
+            line.push(format!("on sale {}", sale.trim_end_matches("-00")));
+        }
+        if let Some(price) = own(first, &e.price, &base.price) {
+            line.push(format!("price {price}"));
+        }
+        if let Some(count) = own(first, &e.pages, &base.pages) {
+            line.push(format!("{} pages", pages(*count)));
+        }
+        if let Some(code) = &e.barcode {
+            line.push(format!("barcode {code}"));
+        }
+        if let Some(isbn) = &e.isbn {
+            line.push(format!("ISBN {isbn}"));
+        }
+        if let Some(indicia) = own(first, &e.indicia, &base.indicia) {
+            line.push(format!("indicia publisher {indicia}"));
+        }
+        if let Some(artists) = cover(e.id)? {
+            line.push(format!("cover: {artists}"));
+        }
+        if matched == Some(e.id) {
+            line.push("its barcode is the one on the owner's cover".to_owned());
+        }
+        if line.is_empty() {
+            let _ = writeln!(text, "{label}");
+        } else {
+            let _ = writeln!(text, "{label}: {}", line.join("; "));
+        }
+    }
+
+    let issue_credits = credits(id, true, false)?;
+    if !issue_credits.is_empty() {
+        let _ = writeln!(text, "Issue credits: {}", issue_credits.join("; "));
+    }
+    if !notes.is_empty() {
+        let _ = writeln!(text, "Notes: {notes}");
+    }
+
+    // The issue's stories, its cover aside, which its edition gives.
+    let mut stories_text = String::new();
+    let mut stmt = conn.prepare(
+        "SELECT id, kind, title, feature, page_count, characters, synopsis, legacy
+         FROM story WHERE issue_id = ?1 AND (kind IS NULL OR kind != 6)
+         ORDER BY seq, id LIMIT 40",
     )?;
     let stories = stmt
         .query_map([id], |r| {
             Ok((
                 r.get::<_, i64>(0)?,
-                r.get::<_, i64>(1)?,
-                r.get::<_, Option<i64>>(2)?,
-                r.get::<_, Option<i64>>(3)?,
-                r.get::<_, Option<String>>(4)?,
+                r.get::<_, Option<i64>>(1)?,
+                r.get::<_, Option<String>>(2)?,
+                r.get::<_, Option<String>>(3)?,
+                r.get::<_, Option<f64>>(4)?,
                 r.get::<_, Option<String>>(5)?,
-                r.get::<_, Option<f64>>(6)?,
+                r.get::<_, Option<String>>(6)?,
                 r.get::<_, Option<String>>(7)?,
-                r.get::<_, Option<String>>(8)?,
-                r.get::<_, Option<String>>(9)?,
-                r.get::<_, Option<String>>(10)?,
             ))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
-    let mut number_of_story = 0;
-    for (sid, issue, _, kind, title, feature, count, characters, synopsis, legacy, variant) in
-        stories
+    for (n, (sid, kind, title, feature, count, characters, synopsis, legacy)) in
+        stories.into_iter().enumerate()
     {
-        let mut head = if kind == Some(6) && issue != id {
-            format!(
-                "Cover of the {} edition",
-                variant.as_deref().unwrap_or("other")
-            )
-        } else if kind == Some(6) {
-            "Cover".to_owned()
-        } else {
-            number_of_story += 1;
-            format!("Story {number_of_story} ({})", story_kind(kind))
-        };
+        let mut head = format!("Story {} ({})", n + 1, story_kind(kind));
         if let Some(title) = title {
             let _ = write!(head, " \u{201c}{title}\u{201d}");
         }
         if let Some(feature) = feature {
             let _ = write!(head, ", feature {feature}");
         }
-        if let (Some(count), false) = (count, kind == Some(6)) {
+        if let Some(count) = count {
             let _ = write!(head, ", {} pages", pages(count));
         }
-        let story_credits = credits(sid, false)?;
-        let _ = write!(text, "{head}:");
+        let story_credits = credits(sid, false, false)?;
+        let _ = write!(stories_text, "{head}:");
         if !story_credits.is_empty() {
-            let _ = write!(text, " {story_credits}");
+            let _ = write!(stories_text, " {}", story_credits.join("; "));
         } else if let Some(legacy) = legacy {
-            let _ = write!(text, " {legacy}");
+            let _ = write!(stories_text, " {legacy}");
         }
-        text.push('\n');
+        stories_text.push('\n');
         let mut cast = conn.prepare_cached(
             "SELECT name, role, origin, death, notes FROM appearance WHERE story_id = ?1
              ORDER BY notes IS NULL, role IS NULL, role, rowid LIMIT ?2",
@@ -616,20 +689,20 @@ fn record(
             })?
             .collect::<rusqlite::Result<_>>()?;
         if !names.is_empty() {
-            let _ = writeln!(text, "  Characters: {}", names.join("; "));
+            let _ = writeln!(stories_text, "  Characters: {}", names.join("; "));
         } else if let Some(characters) = characters {
-            let _ = writeln!(text, "  Characters: {characters}");
+            let _ = writeln!(stories_text, "  Characters: {characters}");
         }
         if let Some(synopsis) = synopsis {
-            let _ = writeln!(text, "  Synopsis: {synopsis}");
+            let _ = writeln!(stories_text, "  Synopsis: {synopsis}");
         }
     }
-    if !notes.is_empty() {
-        let _ = writeln!(text, "Notes: {notes}");
-    }
-    if text.chars().count() > max {
-        text = text.chars().take(max - 1).collect();
-        text.push('\u{2026}');
+    // A long record loses its last stories, not its editions.
+    cut(&mut text, max);
+    let room = max - text.chars().count();
+    if room > 1 {
+        cut(&mut stories_text, room);
+        text.push_str(&stories_text);
     }
     Ok(Some(Record {
         series: name,

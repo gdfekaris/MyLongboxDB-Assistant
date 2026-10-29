@@ -298,7 +298,7 @@ pub const CATALOG_COPY: &str = "catalogue copy";
 /// The most records a lookup takes from the catalogue copy, and the
 /// longest each may be.
 const MAX_RECORDS: usize = 3;
-const MAX_RECORD: usize = 6_000;
+const MAX_RECORD: usize = 16_000;
 
 /// The catalogue copy's records of the book, cleaned and capped as any
 /// text from outside is.

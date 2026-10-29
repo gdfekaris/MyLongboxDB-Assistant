@@ -11,7 +11,8 @@ use common::{dump, folder};
 
 /// More of the made-up catalogue: a later issue sharing the series'
 /// barcode, as older comics' barcodes did; a variant with a cover of its
-/// own; an annual; a one-shot with a long title; a foreign edition of
+/// own, which a colorist helped with; an edition catalogued as an issue
+/// of its own, and another issue's; an annual; a one-shot with a long title; a foreign edition of
 /// the series; and a series a cover's logo names with more words.
 const MORE: &str = "
 INSERT INTO stddata_country VALUES (54, 'de', 'Germany');
@@ -23,6 +24,13 @@ INSERT INTO gcd_issue VALUES (105, 10, '1', '1', 100, 'Cover B', '', 'March 1954
 INSERT INTO gcd_story VALUES (1004, 105, 0, 6, '', '', 1, '', '', '', '', '', '', '', 0);
 INSERT INTO gcd_creator_name_detail VALUES (5, 'Vera Variant');
 INSERT INTO gcd_story_credit VALUES (6, 1004, 5, 7, '', '', 0, 0);
+INSERT INTO gcd_story_credit VALUES (7, 1004, 3, 4, '', '', 0, 0);
+INSERT INTO gcd_issue VALUES (106, 10, '1 [Collector''s Edition]', '1', NULL, '', '',
+    'March 1954', '1954-03-00', '', '0.25 USD', 52, '', '', 5, '', '2026-01-01 00:00:00', 0);
+INSERT INTO gcd_story VALUES (1005, 106, 0, 6, '', '', 1, '', '', '', '', '', '', '', 0);
+INSERT INTO gcd_story_credit VALUES (8, 1005, 5, 7, 'Vera Variant', '', 0, 0);
+INSERT INTO gcd_issue VALUES (107, 10, '10 [UK]', '1', NULL, '', '', '', '', '', '', 36, '',
+    '', 5, '', '2026-01-01 00:00:00', 0);
 INSERT INTO gcd_series VALUES (20, 'The Astonishing Robot Tales Annual', '', 1955, 1956, 2, 1,
     225, 25, '', 2, 0);
 INSERT INTO gcd_issue VALUES (200, 20, '3', '', NULL, '', '', '1955', '1955-00-00', '', '', 64,
@@ -89,12 +97,13 @@ fn the_record_says_what_the_lookup_needs() {
         "barcode 07596060893600111",
         "Edition Cover B:",
         "Issue credits: editing: Ed Itor (editor); editing: Big Chief (editor-in-chief)",
-        "Cover: pencils and inks: Rex Rivet",
+        "36 pages; indicia publisher Atomic Age Publications, Inc.; cover: pencils and inks: Rex Rivet\n",
         "Story 1 (comic story) \u{201c}The Robot Who Read Comics\u{201d}, feature Tinman, 30 pages: script: Ada Sprocket (credited as A. Sprocket); pencils: Rex Rivet (uncertain)",
         "Characters: Tinman (featured, origin, first appearance); Professor Gears (villain, death)",
         "Synopsis: Tinman learns to read.",
-        "Cover of the Cover B edition: pencils and inks: Vera Variant",
+        "Edition Cover B: price 0.10 USD; cover: pencils and inks: Vera Variant\n",
         "Notes: First issue.",
+        "Edition Collector's Edition (catalogued as an issue of its own, #1 [Collector's Edition]): price 0.25 USD; 52 pages; cover: pencils and inks: Vera Variant\n",
     ] {
         assert!(text.contains(said), "{said}\n\n{text}");
     }
@@ -104,6 +113,79 @@ fn the_record_says_what_the_lookup_needs() {
     // Ads and deleted credits are not in it.
     assert!(!text.contains("Sea-Monkeys"), "{text}");
     assert!(!text.contains("inks: Ada Sprocket"), "{text}");
+    // A cover's colorist is not one of its artists, and #10's UK
+    // edition is not #1's.
+    assert!(!text.contains("colors"), "{text}");
+    assert!(!text.contains("UK"), "{text}");
+    // A variant does not repeat the dates it shares with the issue.
+    assert_eq!(text.matches("cover date as printed").count(), 1, "{text}");
+}
+
+/// An issue with seventy variants, each with a cover of its own, and
+/// more stories than a record has room for.
+fn crowded() -> String {
+    let mut sql = String::from(
+        "INSERT INTO gcd_series VALUES (30, 'Variant Robot', '', 2019, 2019, 7, 1, 225, 25, '',
+             2, 0);
+         INSERT INTO gcd_issue VALUES (300, 30, '1', '', NULL, '', '', 'March 2019',
+             '2019-03-00', '2019-01-23', '4.99 USD', 40, '', '', 5, '', '2026-01-01', 0);
+         INSERT INTO gcd_story VALUES (3000, 300, 0, 6, '', '', 1, '', '', '', '', '', '', '',
+             0);
+         INSERT INTO gcd_story_credit VALUES (300, 3000, 1, 7, '', '', 0, 0);",
+    );
+    for n in 1..=70 {
+        let (issue, story, creator) = (300 + n, 3000 + n, 100 + n);
+        sql.push_str(&format!(
+            "INSERT INTO gcd_issue VALUES ({issue}, 30, '1', '', 300, 'Store {n} Exclusive',
+                 '', 'March 2019', '2019-03-00', '2019-01-23', '4.99 USD', 40, '', '', 5, '',
+                 '2026-01-01', 0);
+             INSERT INTO gcd_story VALUES ({story}, {issue}, 0, 6, '', '', 1, '', '', '', '',
+                 '', '', '', 0);
+             INSERT INTO gcd_creator_name_detail VALUES ({creator}, 'Artist Number {n}');
+             INSERT INTO gcd_story_credit VALUES ({story}, {story}, {creator}, 7, '', '', 0,
+                 0);"
+        ));
+    }
+    let synopsis = "The robot walks on. ".repeat(40);
+    for n in 1..=40 {
+        let story = 4000 + n;
+        sql.push_str(&format!(
+            "INSERT INTO gcd_story VALUES ({story}, 300, {n}, 19, 'Chapter {n}', '', 6, '',
+                 '{synopsis}', '', '', '', '', '', 0);"
+        ));
+    }
+    sql
+}
+
+#[test]
+fn every_edition_and_its_cover_artist_is_given_however_long_the_record() {
+    let dir = folder("gcd-crowded");
+    dump(&dir, &format!("{MORE}{}", crowded()));
+    import(
+        &dir.join("2026-10-16.db"),
+        &dir,
+        &mut |_, _| {},
+        &AtomicBool::new(false),
+    )
+    .unwrap();
+    let catalog = Catalog::open(Path::new(&dir)).unwrap();
+    let text = found(&catalog, "Variant Robot", Some(2019), "1")
+        .remove(0)
+        .text;
+    assert!(text.chars().count() <= assistant_gcd::MAX_RECORD);
+    assert!(text.contains("Edition: the issue itself"), "{text}");
+    for n in 1..=70 {
+        let line =
+            format!("Edition Store {n} Exclusive: cover: pencils and inks: Artist Number {n}\n");
+        assert!(text.contains(&line), "{line}\n\n{text}");
+    }
+    // The stories fill what room is left, and the last are cut.
+    assert!(
+        text.contains("Story 1 (comic story) \u{201c}Chapter 1\u{201d}"),
+        "{text}"
+    );
+    assert!(!text.contains("Chapter 40"), "{text}");
+    assert!(text.ends_with('\u{2026}'), "{text}");
 }
 
 #[test]
@@ -127,7 +209,7 @@ fn a_barcode_finds_its_edition_among_issues_that_share_it() {
     assert!(
         first[0]
             .text
-            .contains("barcode 07596060893600111; indicia publisher Atomic Age Publications, Inc.; its barcode is the one on the owner's cover"),
+            .contains("Edition Newsstand: on sale 1954-01-20; price 0.10 USD; barcode 07596060893600111; its barcode is the one on the owner's cover\n"),
         "{}",
         first[0].text
     );
