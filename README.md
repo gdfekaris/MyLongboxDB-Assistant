@@ -20,7 +20,7 @@ The Assistant never opens your MyLongboxDB collection. MyLongboxDB
 itself stays offline; this separate app holds the network permission
 instead, and only ever sees the photos and text you give it.
 
-**Status:** 0.4.0 is the latest release. It is not on Flathub; install
+**Status:** 0.5.0 is the latest release. It is not on Flathub; install
 it from the Releases page as described below.
 
 ## Installing
@@ -28,14 +28,14 @@ it from the Releases page as described below.
 Each release on the repository's Releases page has a Flatpak bundle and
 its SHA-256 checksum. Check the download, then install it:
 
-    sha256sum -c MyLongboxDB-Assistant-0.4.0.flatpak.sha256
-    flatpak install --user MyLongboxDB-Assistant-0.4.0.flatpak
+    sha256sum -c MyLongboxDB-Assistant-0.5.0.flatpak.sha256
+    flatpak install --user MyLongboxDB-Assistant-0.5.0.flatpak
 
 GitHub also keeps a signed statement, made by the repository's CI, that
 each bundle was built from the tagged source. With the GitHub CLI
 installed, check it with:
 
-    gh attestation verify MyLongboxDB-Assistant-0.4.0.flatpak --repo gdfekaris/MyLongboxDB-Assistant
+    gh attestation verify MyLongboxDB-Assistant-0.5.0.flatpak --repo gdfekaris/MyLongboxDB-Assistant
 
 You need an Anthropic API key. Make one just for this app, in a
 workspace with a monthly spend limit, in the Claude Console.
@@ -126,7 +126,10 @@ later version, but this version never contacts it.
 
 - **Sent to Anthropic:** each cover photo you add, re-encoded from its
   pixels so it carries no EXIF, GPS, or other metadata; the series and
-  issue lines you type; and the app's fixed instructions.
+  issue lines you type; and the app's fixed instructions. With a further
+  photographed copy of an issue already looked up goes the issue that
+  lookup found (its series, start year, volume, number, and publisher)
+  and that copy's variant name.
 - **Looked up at Anthropic:** to research a book, the model searches
   the web and may read whole issue pages from the Marvel and DC wikis
   at marvel.fandom.com and dc.fandom.com and from marvel.com, dc.com,

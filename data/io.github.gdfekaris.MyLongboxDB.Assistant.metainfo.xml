@@ -39,6 +39,19 @@
   </branding>
 
   <releases>
+    <release version="0.5.0" date="2026-10-29">
+      <description>
+        <p>Copies of one issue, and their editions.</p>
+        <ul>
+          <li>Copies of the same issue share one set of issue details, and what you change in one changes in all; each copy keeps its own edition: variant, printing, distribution, prices, and barcode</li>
+          <li>A book's page lists its other copies and shows This Copy's Edition apart from the issue's details, with a switch to keep a copy's details apart</li>
+          <li>A further photographed copy of an issue is looked up only for its edition, which costs less</li>
+          <li>Variant names say the edition, the store, and what sets the cover apart, and two copies with different covers are never given the same name unnoticed</li>
+          <li>With your copy of the Grand Comics Database, every edition of an issue and its cover artists are used to find your copy's variant</li>
+          <li>Abbreviated series titles are spelled out, and story arcs include the wider saga, titled as printed</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.4.0" date="2026-10-28">
       <description>
         <p>Cleaner imports, larger photos, and nothing lost by closing.</p>
