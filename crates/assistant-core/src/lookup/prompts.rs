@@ -5,7 +5,7 @@
 use super::fields::FIELDS;
 
 /// Raised with every change to the texts below.
-pub const PROMPT_VERSION: &str = "2026-10-29.4";
+pub const PROMPT_VERSION: &str = "2026-10-29.5";
 
 /// The read step, for photos: what is printed on the covers, and nothing
 /// looked up or remembered. The items to report follow it.
@@ -93,6 +93,10 @@ as Teenage Mutant Ninja Turtles, not each member. Name a first \
 appearance only where a source says it is one, or it is well known.
 - An annual is its own series: Amazing Spider-Man Annual #1, not \
 Amazing Spider-Man #Annual 1.
+- Story arcs: the issue's own arc, and the wider event or saga it is \
+part of where it is one, as Reign of the Supermen! within The Death \
+and Return of Superman, each titled exactly as printed, punctuation \
+included.
 ";
 
 /// After the research rules, when the owner's copy of the Grand Comics
