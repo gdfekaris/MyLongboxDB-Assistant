@@ -8,11 +8,12 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use adw::prelude::*;
+use assistant_core::copies;
 use assistant_core::lookup::{
     CATALOG_COPY, COVER_PHOTO, Detail, Draft, Entry, FIELDS, Identity, KNOWLEDGE, Kind, Source,
     Value, spec,
 };
-use assistant_core::model::{Category, Confidence, Grade, GradeType, Role};
+use assistant_core::model::{Category, Confidence, Distribution, Grade, GradeType, Role};
 use assistant_core::results::ReviewBook;
 
 use crate::format::shown_cover_date;
@@ -50,6 +51,9 @@ pub enum ReviewMsg {
     Grade(usize, String),
     GradedBy(usize, Option<GradeType>),
     Certificate(usize, String),
+    /// Whether the book keeps its issue facts apart from other copies of
+    /// what the lookups took for the same issue.
+    Apart(usize, bool),
 }
 
 /// Who graded a copy, as MyLongboxDB offers the choice.
@@ -417,8 +421,64 @@ pub fn status(book: &ReviewBook) -> String {
     }
 }
 
+/// Which edition a copy is, to tell copies of one issue apart.
+fn edition_label(book: &ReviewBook) -> String {
+    let text = |key: &str| book.draft.value(key).map_or("", |v| v.text.as_str());
+    let mut parts = vec![match text("variant") {
+        "" => gettext("Standard cover"),
+        variant => variant.to_owned(),
+    }];
+    match text("printing") {
+        "" | "1" => {}
+        n => parts.push(gettext_f("printing {n}", &[("n", n)])),
+    }
+    match Distribution::from_code(text("distribution")) {
+        Some(Distribution::Direct) => parts.push(gettext("direct")),
+        Some(Distribution::Newsstand) => parts.push(gettext("newsstand")),
+        None => {}
+    }
+    parts.join(", ")
+}
+
+/// The other copies of the book's issue, and whether it shares the
+/// issue's facts with them.
+fn copies_group(
+    index: usize,
+    book: &ReviewBook,
+    others: &[(usize, &ReviewBook)],
+    emit: &Emit,
+) -> adw::PreferencesGroup {
+    let g = group(&gettext("Other Copies of This Issue"));
+    let share = adw::SwitchRow::builder()
+        .title(gettext("Share the Issue's Details"))
+        .subtitle(gettext(
+            "Copies of one issue have the same details; only their editions differ",
+        ))
+        .active(!book.apart)
+        .build();
+    {
+        let emit = emit.clone();
+        share.connect_active_notify(move |r| emit(ReviewMsg::Apart(index, !r.is_active())));
+    }
+    g.add(&share);
+    for (n, other) in others {
+        let row = plain_row(&edition_label(other), &status(other));
+        row.set_activatable(true);
+        row.add_suffix(&gtk::Image::from_icon_name("go-next-symbolic"));
+        let (emit, n) = (emit.clone(), *n);
+        row.connect_activated(move |_| emit(ReviewMsg::Open(n)));
+        g.add(&row);
+    }
+    g
+}
+
 /// A book's review page content.
-fn book_content(index: usize, book: &ReviewBook, emit: &Emit) -> gtk::Box {
+fn book_content(
+    index: usize,
+    book: &ReviewBook,
+    others: &[(usize, &ReviewBook)],
+    emit: &Emit,
+) -> gtk::Box {
     let draft: &Draft = &book.draft;
     let column = gtk::Box::builder()
         .orientation(gtk::Orientation::Vertical)
@@ -501,34 +561,40 @@ fn book_content(index: usize, book: &ReviewBook, emit: &Emit) -> gtk::Box {
 
     match &draft.identity {
         Identity::Identified => {
+            if !others.is_empty() || book.apart {
+                column.append(&copies_group(index, book, others, emit));
+            }
             let details = group(&gettext("Details"));
-            details.set_description(Some(&gettext(
-                "Ticked values go into the export; unticked ones are left out.",
+            details.set_description(Some(&if others.is_empty() {
+                gettext("Ticked values go into the export; unticked ones are left out.")
+            } else {
+                gettext(
+                    "Ticked values go into the export; unticked ones are left out. \
+                     These are the issue's, so ticking or editing one here does the \
+                     same for the other copies.",
+                )
+            }));
+            let edition = group(&gettext("This Copy's Edition"));
+            edition.set_description(Some(&gettext(
+                "This copy's own: which cover and printing it is, and its prices and barcode.",
             )));
+            let mut edition_rows = 0;
             for field in FIELDS {
                 // Every book is a comic unless the lookup says otherwise.
                 let filled = draft
                     .value(field.key)
                     .filter(|v| !v.text.is_empty() && !(v.key == "category" && v.text == "comic"));
                 if let Some(value) = filled {
-                    details.add(&value_row(
-                        index,
-                        value,
-                        &gettext(field.label),
-                        &draft.sources,
-                        emit,
-                    ));
+                    let row = value_row(index, value, &gettext(field.label), &draft.sources, emit);
+                    if copies::shared(field.key) {
+                        details.add(&row);
+                    } else {
+                        edition.add(&row);
+                        edition_rows += 1;
+                    }
                 }
             }
             column.append(&details);
-            // A collected edition has a condition in MyLongboxDB, not a
-            // grade, which the owner sets there.
-            let collected = draft
-                .value("category")
-                .is_some_and(|v| v.accepted && v.text == Category::CollectedEdition.code());
-            if !collected {
-                column.append(&copy_group(index, book, emit));
-            }
             for (title, list, entries) in [
                 (gettext("Credits"), List::Credits, &draft.credits),
                 (gettext("Characters"), List::Characters, &draft.characters),
@@ -543,6 +609,18 @@ fn book_content(index: usize, book: &ReviewBook, emit: &Emit) -> gtk::Box {
                     g.add(&row);
                 }
                 column.append(&g);
+            }
+            // The issue's facts above, this copy's own below.
+            if edition_rows > 0 {
+                column.append(&edition);
+            }
+            // A collected edition has a condition in MyLongboxDB, not a
+            // grade, which the owner sets there.
+            let collected = draft
+                .value("category")
+                .is_some_and(|v| v.accepted && v.text == Category::CollectedEdition.code());
+            if !collected {
+                column.append(&copy_group(index, book, emit));
             }
             let blanks = group("");
             let expander = adw::ExpanderRow::builder()
@@ -743,9 +821,21 @@ impl ReviewPage {
                 .any(|b| b.front.as_ref().is_some_and(|p| p.name() == name))
         });
         for (index, book) in books.iter().enumerate() {
+            let title = book.draft.query.to_string();
+            // Copies of one issue are told apart by their editions.
+            let repeated = books
+                .iter()
+                .filter(|b| b.draft.query.to_string() == title)
+                .count()
+                > 1;
+            let subtitle = if repeated && book.draft.identity == Identity::Identified {
+                format!("{} \u{2014} {}", edition_label(book), status(book))
+            } else {
+                status(book)
+            };
             let row = adw::ActionRow::builder()
-                .title(book.draft.query.to_string())
-                .subtitle(status(book))
+                .title(title)
+                .subtitle(subtitle)
                 .activatable(true)
                 .build();
             row.set_use_markup(false);
@@ -815,11 +905,13 @@ impl ReviewPage {
     }
 
     /// Opens a book's page, in place of any book page already open.
-    pub fn show_book(&self, index: usize, book: &ReviewBook) {
+    pub fn show_book(&self, index: usize, book: &ReviewBook, others: &[(usize, &ReviewBook)]) {
         self.root.pop_to_tag("list");
         let toolbar = adw::ToolbarView::new();
         toolbar.add_top_bar(&adw::HeaderBar::new());
-        toolbar.set_content(Some(&scrolled(&book_content(index, book, &self.emit))));
+        toolbar.set_content(Some(&scrolled(&book_content(
+            index, book, others, &self.emit,
+        ))));
         let page = adw::NavigationPage::with_tag(&toolbar, &book.draft.query.to_string(), "book");
         let open = self.open.clone();
         page.connect_hidden(move |_| open.set(None));
@@ -829,23 +921,23 @@ impl ReviewPage {
 
     /// Shows a book's page again after a change, where the owner had
     /// scrolled to, so editing a value does not lose their place.
-    pub fn refresh_book(&self, index: usize, book: &ReviewBook) {
+    pub fn refresh_book(&self, index: usize, book: &ReviewBook, others: &[(usize, &ReviewBook)]) {
         let toolbar = self
             .root
             .find_page("book")
             .and_then(|p| p.child())
             .and_then(|c| c.downcast::<adw::ToolbarView>().ok());
         let (Some(toolbar), Some(open)) = (toolbar, self.open.get()) else {
-            return self.show_book(index, book);
+            return self.show_book(index, book, others);
         };
         if open != index {
-            return self.show_book(index, book);
+            return self.show_book(index, book, others);
         }
         let at = toolbar
             .content()
             .and_then(|c| c.downcast::<gtk::ScrolledWindow>().ok())
             .map_or(0.0, |s| s.vadjustment().value());
-        let content = scrolled(&book_content(index, book, &self.emit));
+        let content = scrolled(&book_content(index, book, others, &self.emit));
         // The new page grows as it is laid out, so its place is set once
         // its scroll range is large enough to hold it.
         let handler = Rc::new(RefCell::new(None));

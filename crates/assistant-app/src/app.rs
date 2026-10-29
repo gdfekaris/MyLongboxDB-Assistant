@@ -8,6 +8,7 @@ use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
 use adw::prelude::*;
+use assistant_core::copies;
 use assistant_core::cost::{Estimate, anthropic_price, dollars};
 use assistant_core::lookup::{Draft, Settings as LookupSettings};
 use assistant_core::queue::{self, Event, Item, RunOptions, Summary};
@@ -292,6 +293,21 @@ impl App {
         }
     }
 
+    /// The other copies of book `i`'s issue, with their places.
+    fn copies_of(&self, i: usize) -> Vec<(usize, &ReviewBook)> {
+        copies::others(&self.results, i, this_year())
+            .into_iter()
+            .map(|n| (n, &self.results[n]))
+            .collect()
+    }
+
+    /// Shows book `i`'s page again after a change, if it is open.
+    fn refresh_open_book(&self, i: usize) {
+        if let Some(book) = self.results.get(i) {
+            self.review.refresh_book(i, book, &self.copies_of(i));
+        }
+    }
+
     fn save_results(&self) {
         if let Err(e) = results::save(&results_path(), &self.results) {
             self.toast(&gettext_f(
@@ -466,7 +482,7 @@ impl App {
         match msg {
             ReviewMsg::Open(i) => {
                 if let Some(book) = self.results.get(i) {
-                    self.review.show_book(i, book);
+                    self.review.show_book(i, book, &self.copies_of(i));
                 }
             }
             ReviewMsg::Include(i, on) => {
@@ -512,29 +528,38 @@ impl App {
                     self.save_results();
                 }
             }
+            // A tick among a copy's issue facts ticks them in every copy.
             ReviewMsg::AcceptValue(i, key, on) => {
-                let value = self
-                    .results
-                    .get_mut(i)
-                    .and_then(|b| b.draft.values.iter_mut().find(|v| v.key == key));
-                if let Some(value) = value {
+                let ticked = copies::change(&mut self.results, i, this_year(), |d| {
+                    let value = d.values.iter_mut().find(|v| v.key == key)?;
                     value.accepted = on && !value.text.is_empty();
+                    Some(())
+                });
+                if ticked.flatten().is_some() {
                     self.save_results();
                 }
             }
             ReviewMsg::AcceptEntry(i, list, n, on) => {
-                let entry = self.results.get_mut(i).and_then(|b| {
-                    let d = &mut b.draft;
-                    match list {
+                let ticked = copies::change(&mut self.results, i, this_year(), |d| {
+                    let entry = match list {
                         List::Credits => d.credits.get_mut(n),
                         List::Characters => d.characters.get_mut(n),
                         List::Teams => d.teams.get_mut(n),
                         List::Arcs => d.story_arcs.get_mut(n),
-                    }
-                });
-                if let Some(entry) = entry {
+                    }?;
                     entry.accepted = on;
+                    Some(())
+                });
+                if ticked.flatten().is_some() {
                     self.save_results();
+                }
+            }
+            ReviewMsg::Apart(i, apart) => {
+                if let Some(book) = self.results.get_mut(i) {
+                    book.apart = apart;
+                    copies::share(&mut self.results, this_year());
+                    self.save_results();
+                    self.refresh_open_book(i);
                 }
             }
             ReviewMsg::Edit(i, key) => self.edit_value(i, key, None),
@@ -1315,7 +1340,12 @@ impl SimpleComponent for App {
         // Results that cannot be read are set aside rather than lost, and
         // rather than overwritten by the next save.
         let (results, unreadable) = match results::load(&results_path(), this_year()) {
-            Ok(results) => (results, None),
+            // Copies of one issue share its facts, however they were
+            // left.
+            Ok(mut results) => {
+                copies::share(&mut results, this_year());
+                (results, None)
+            }
             Err(why) => {
                 let _ = std::fs::rename(
                     results_path(),
@@ -1582,6 +1612,7 @@ impl SimpleComponent for App {
                         Some(i) => self.results[i] = book,
                         None => self.results.push(book),
                     }
+                    copies::share(&mut self.results, this_year());
                     self.save_results();
                 }
             }
@@ -1629,9 +1660,9 @@ impl SimpleComponent for App {
             }
             AppMsg::Review(msg) => self.review_msg(msg),
             AppMsg::Edited(i, key, text) => {
-                let Some(book) = self.results.get_mut(i) else {
+                if i >= self.results.len() {
                     return;
-                };
+                }
                 // A cover date is shown and typed as Apr 1990, and kept as
                 // MyLongboxDB imports it.
                 let kept = match (key, crate::format::parse_cover_date(&text)) {
@@ -1642,12 +1673,18 @@ impl SimpleComponent for App {
                     )),
                     _ => Ok(text.clone()),
                 };
-                match kept.and_then(|kept| book.draft.set_value(key, &kept, this_year())) {
+                // An edit to a copy's issue facts changes them in every
+                // copy.
+                let edited = kept.and_then(|kept| {
+                    copies::change(&mut self.results, i, this_year(), |d| {
+                        d.set_value(key, &kept, this_year())
+                    })
+                    .unwrap_or(Ok(()))
+                });
+                match edited {
                     Ok(()) => {
                         self.save_results();
-                        if let Some(book) = self.results.get(i) {
-                            self.review.refresh_book(i, book);
-                        }
+                        self.refresh_open_book(i);
                     }
                     Err(why) => {
                         self.toast(&why);
