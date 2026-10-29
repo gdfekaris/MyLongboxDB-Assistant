@@ -215,7 +215,7 @@ fn adopt(from: &Draft, at: Option<usize>, to: &mut Draft) -> Option<usize> {
 }
 
 /// Gives `to` exactly the issue facts of `from`, keeping its edition.
-fn copy_facts(from: &Draft, to: &mut Draft) {
+pub(crate) fn copy_facts(from: &Draft, to: &mut Draft) {
     to.values.retain(|v| !shared(v.key));
     for v in shared_values(from) {
         let source = adopt(from, v.source, to);

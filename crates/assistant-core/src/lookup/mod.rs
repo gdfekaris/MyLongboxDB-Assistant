@@ -59,6 +59,10 @@ pub struct Settings {
     pub max_searches: u32,
     /// The most pages the research may read whole.
     pub max_pages: u32,
+    /// The most searches and pages for a further copy of an issue already
+    /// looked up, whose research is only of which edition it is.
+    pub copy_searches: u32,
+    pub copy_pages: u32,
     pub effort: Effort,
     /// The current year, which bounds the dates a value may have.
     pub this_year: u16,
@@ -72,6 +76,8 @@ impl Settings {
         Self {
             max_searches: 8,
             max_pages: 4,
+            copy_searches: 3,
+            copy_pages: 2,
             effort: Effort::High,
             this_year,
         }
@@ -850,7 +856,9 @@ pub fn look_up(
     cancel: &AtomicBool,
     spent: &mut Spent,
 ) -> Result<Draft, LookupError> {
-    look_up_from(provider, catalog, query, None, settings, cancel, spent)
+    look_up_from(
+        provider, catalog, query, None, None, settings, cancel, spent,
+    )
 }
 
 /// The owner's photos of one book: the front cover, and the back if they
@@ -877,6 +885,18 @@ pub fn look_up_covers(
     cancel: &AtomicBool,
     spent: &mut Spent,
 ) -> Result<Draft, LookupError> {
+    let reading = read_covers(provider, covers, settings, cancel, spent)?;
+    look_up_read(provider, catalog, covers, &reading, settings, cancel, spent)
+}
+
+/// Reads what the covers print: the first step of a photo lookup.
+pub fn read_covers(
+    provider: &dyn Provider,
+    covers: &Covers,
+    settings: &Settings,
+    cancel: &AtomicBool,
+    spent: &mut Spent,
+) -> Result<Reading, LookupError> {
     let json = reply(
         provider.answer(
             &SchemaRequest {
@@ -899,37 +919,128 @@ pub fn look_up_covers(
         spent,
     )?;
     let reading = Reading::parse(&json).map_err(|why| LookupError::Unreadable(clean(&why, 300)))?;
-    let query = match &covers.chosen {
-        Some(chosen) => chosen.clone(),
-        None => reading
-            .query(covers.line)
-            .map_err(LookupError::NoBookOnCover)?,
-    };
     if cancel.load(Ordering::Relaxed) {
         return Err(LookupError::Failed(Failure::Cancelled));
     }
-    let mut draft = look_up_from(
+    Ok(reading)
+}
+
+/// The book photos show, as they are looked up: the series the owner
+/// picked from an earlier lookup's candidates, or what the covers print.
+pub fn covers_query(covers: &Covers, reading: &Reading) -> Result<BookQuery, LookupError> {
+    match &covers.chosen {
+        Some(chosen) => Ok(chosen.clone()),
+        None => reading
+            .query(covers.line)
+            .map_err(LookupError::NoBookOnCover),
+    }
+}
+
+/// What tells copies of one issue apart from other books before they are
+/// looked up: the title as their covers print it, or as the owner typed
+/// it, and the number. Unlike a title compared with a catalogue's, an
+/// annual's keeps its Annual.
+pub fn copy_key(query: &BookQuery) -> String {
+    let lower = query.series.to_lowercase().replace('&', " and ");
+    let spaced: String = lower
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { ' ' })
+        .collect();
+    let mut words: Vec<&str> = spaced.split_whitespace().collect();
+    if words.len() > 1 && words[0] == "the" {
+        words.remove(0);
+    }
+    format!("{} #{}", words.join(" "), query.number.sort_key())
+}
+
+/// Looks up the book whose covers were read as `reading`, as for a
+/// typed line, then holds what the covers show against what was found.
+pub fn look_up_read(
+    provider: &dyn Provider,
+    catalog: Option<&dyn Catalog>,
+    covers: &Covers,
+    reading: &Reading,
+    settings: &Settings,
+    cancel: &AtomicBool,
+    spent: &mut Spent,
+) -> Result<Draft, LookupError> {
+    let query = covers_query(covers, reading)?;
+    let draft = look_up_from(
         provider,
         catalog,
         &query,
-        Some((&reading, &covers.front)),
+        Some((reading, &covers.front)),
+        None,
         settings,
         cancel,
         spent,
     )?;
-    compare_barcodes(&mut draft, &reading);
-    distribution_from_box(&mut draft, &reading);
-    first_printing(&mut draft, &reading);
-    printed_number(&mut draft, &reading);
-    undated_cover(&mut draft, &reading);
-    facsimile(&mut draft, &reading);
+    Ok(from_covers(draft, covers, reading))
+}
+
+/// Looks up a further copy of an issue already looked up, as `known`:
+/// its research is only of which edition the covers show, and the
+/// issue's facts are `known`'s. Where the research finds the covers are
+/// of another issue, the copy is looked up in full as any book is.
+#[allow(clippy::too_many_arguments)]
+pub fn look_up_copy(
+    provider: &dyn Provider,
+    catalog: Option<&dyn Catalog>,
+    covers: &Covers,
+    reading: &Reading,
+    known: &Draft,
+    settings: &Settings,
+    cancel: &AtomicBool,
+    spent: &mut Spent,
+) -> Result<Draft, LookupError> {
+    let query = covers_query(covers, reading)?;
+    let draft = look_up_from(
+        provider,
+        catalog,
+        &query,
+        Some((reading, &covers.front)),
+        Some(known),
+        settings,
+        cancel,
+        spent,
+    )?;
+    let mut draft = from_covers(draft, covers, reading);
+    // Which issue each is, as found, ticked or not: the copy's series may
+    // wait for the owner because its cover prints another title.
+    let issue = |d: &Draft| {
+        let text = |key: &str| d.value(key).map_or("", |v| v.text.as_str()).to_lowercase();
+        let number = match text("issue_number") {
+            n if n.is_empty() => d.query.number.sort_key().to_owned(),
+            n => crate::IssueNumber::new(&n).map_or(n, |n| n.sort_key().to_owned()),
+        };
+        (text("series"), text("start_year"), number)
+    };
+    let found = issue(&draft);
+    if draft.identity != Identity::Identified || found.0.is_empty() || found != issue(known) {
+        if cancel.load(Ordering::Relaxed) {
+            return Err(LookupError::Failed(Failure::Cancelled));
+        }
+        return look_up_read(provider, catalog, covers, reading, settings, cancel, spent);
+    }
+    crate::copies::copy_facts(known, &mut draft);
+    Ok(draft)
+}
+
+/// A photo lookup's draft, held against what the covers show.
+fn from_covers(mut draft: Draft, covers: &Covers, reading: &Reading) -> Draft {
+    compare_barcodes(&mut draft, reading);
+    distribution_from_box(&mut draft, reading);
+    first_printing(&mut draft, reading);
+    printed_number(&mut draft, reading);
+    undated_cover(&mut draft, reading);
+    facsimile(&mut draft, reading);
     variant_name(&mut draft);
     if covers.chosen.is_some() && draft.identity == Identity::Identified {
         given_volume(&mut draft);
     } else {
-        series_from_cover(&mut draft, &reading);
+        series_from_cover(&mut draft, reading);
     }
-    Ok(draft)
+    draft
 }
 
 /// A facsimile is catalogued as the issue it reprints, with the dates of
@@ -1322,11 +1433,15 @@ fn known_names(draft: &mut Draft) {
 
 /// The steps after reading: research, structure, check. `photo` is what
 /// the covers showed and the front cover, for a photo lookup.
+/// `copy_of`, for a further copy of an issue already looked up, limits
+/// the research to which edition the covers show.
+#[allow(clippy::too_many_arguments)]
 fn look_up_from(
     provider: &dyn Provider,
     catalog: Option<&dyn Catalog>,
     query: &BookQuery,
     photo: Option<(&Reading, &Jpeg)>,
+    copy_of: Option<&Draft>,
     settings: &Settings,
     cancel: &AtomicBool,
     spent: &mut Spent,
@@ -1343,24 +1458,41 @@ fn look_up_from(
     } else {
         prompts::CATALOGUE
     };
+    let (report, known, max_searches, max_pages) = match copy_of {
+        None => (
+            format!(
+                "{}{}and its credits, characters, teams, and story arcs, each with the page that says so, marked [knowledge], or marked [GCD 1] and so on.\n",
+                prompts::REPORT,
+                prompts::field_list(from_text)
+            ),
+            String::new(),
+            settings.max_searches,
+            settings.max_pages,
+        ),
+        Some(known) => (
+            format!(
+                "{}{}{}",
+                prompts::COPY,
+                prompts::REPORT,
+                prompts::copy_field_list()
+            ),
+            format!("\n{}", known_issue(known, settings.this_year)),
+            settings.copy_searches,
+            settings.copy_pages,
+        ),
+    };
     let research = reply(
         provider.research(
             &ResearchRequest {
-                system: format!(
-                    "{}{catalogue_rule}{}{}{}and its credits, characters, teams, and story arcs, each with the page that says so, marked [knowledge], or marked [GCD 1] and so on.\n",
-                    prompts::RESEARCH,
-                    edition,
-                    prompts::REPORT,
-                    prompts::field_list(from_text)
-                ),
+                system: format!("{}{catalogue_rule}{}{report}", prompts::RESEARCH, edition,),
                 images: front.into_iter().cloned().collect(),
                 user: format!(
-                    "{}{cover}{}",
+                    "{}{cover}{}{known}",
                     describe(query, reading),
                     records_for_research(&records)
                 ),
-                max_searches: settings.max_searches,
-                max_pages: settings.max_pages,
+                max_searches,
+                max_pages,
                 effort: settings.effort,
                 max_tokens: RESEARCH_TOKENS,
             },
@@ -1478,6 +1610,31 @@ fn look_up_from(
     titled_year(&mut draft);
     judgments(&mut draft);
     Ok(draft)
+}
+
+/// The issue a further copy is of, as the research is told it.
+fn known_issue(known: &Draft, this_year: u16) -> String {
+    let Some(book) = known.book(this_year) else {
+        return String::new();
+    };
+    let mut text = format!(
+        "The owner has already catalogued this issue from another copy: {}",
+        book.series.name
+    );
+    if let Some(year) = book.series.start_year {
+        text.push_str(&format!(" ({year})"));
+    }
+    if let Some(volume) = book.series.volume {
+        text.push_str(&format!(" Vol. {volume}"));
+    }
+    if let Some(number) = &book.issue.number {
+        text.push_str(&format!(" #{}", number.as_str()));
+    }
+    if !book.series.publisher.is_empty() {
+        text.push_str(&format!(", {}", book.series.publisher));
+    }
+    text.push('\n');
+    text
 }
 
 /// A volume the owner gave, typed as in Batman Vol. 2 #1 or with the

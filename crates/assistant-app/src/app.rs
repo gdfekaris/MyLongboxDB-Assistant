@@ -879,6 +879,14 @@ impl App {
         };
         let books = std::mem::take(&mut self.pending);
         let queries: Vec<Item> = books.iter().map(|b| b.item.clone()).collect();
+        // Books looked up before, whose further copies need only their
+        // editions found.
+        let known: Vec<Draft> = self
+            .results
+            .iter()
+            .filter(|b| !b.apart)
+            .map(|b| b.draft.clone())
+            .collect();
         let mut run = Run::new(books);
         run.replaces = self.replacing.take();
         let cancel = run.cancel.clone();
@@ -904,7 +912,9 @@ impl App {
                         api: Anthropic::new(&client, &key),
                         model,
                     };
-                    queue::run(&provider, catalog, &queries, &options, &cancel, &emit)
+                    queue::run(
+                        &provider, catalog, &known, &queries, &options, &cancel, &emit,
+                    )
                 }
                 ProviderChoice::OpenRouter => {
                     // Prices are not needed: OpenRouter reports what each
@@ -923,7 +933,9 @@ impl App {
                             web_search_price: None,
                         },
                     };
-                    queue::run(&provider, catalog, &queries, &options, &cancel, &emit)
+                    queue::run(
+                        &provider, catalog, &known, &queries, &options, &cancel, &emit,
+                    )
                 }
             };
             if let Ok(summary) = summary {

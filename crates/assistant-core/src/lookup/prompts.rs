@@ -5,7 +5,7 @@
 use super::fields::FIELDS;
 
 /// Raised with every change to the texts below.
-pub const PROMPT_VERSION: &str = "2026-10-29.1";
+pub const PROMPT_VERSION: &str = "2026-10-29.2";
 
 /// The read step, for photos: what is printed on the covers, and nothing
 /// looked up or remembered. The items to report follow it.
@@ -245,6 +245,37 @@ compare it with: judge it by what you know of this issue and by the \
 notes. Clear it if you know it is wrong, and doubt it if you are not \
 sure it is right.
 ";
+
+/// The research rule for a further copy of an issue already looked up.
+pub const COPY: &str = "\
+- The owner has already catalogued this issue from another copy of it, \
+named after the book below. First make sure the photo shows that very \
+issue: its series, start year, and number. If it shows another issue, \
+say so plainly, name the issue it is, and report nothing more. If it is \
+that issue, its story, credits, and characters are known already: \
+spend your searches only on which edition this copy is, and report \
+only the fields below.
+";
+
+/// The fields the research reports for a further copy of an issue: which
+/// issue it is, then its edition.
+pub fn copy_field_list() -> String {
+    FIELDS
+        .iter()
+        .filter(|f| {
+            [
+                "series",
+                "start_year",
+                "volume",
+                "issue_number",
+                "publisher",
+            ]
+            .contains(&f.key)
+                || !crate::copies::shared(f.key)
+        })
+        .map(|f| format!("- {}: {}\n", f.key, f.hint))
+        .collect()
+}
 
 /// The fields a step asks about, one per line with what each holds.
 pub fn field_list(from_text: bool) -> String {

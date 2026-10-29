@@ -617,6 +617,197 @@ fn photo_structured(given: &[(&str, Json)]) -> Json {
     answer
 }
 
+/// A copy of Astonishing Robot Tales #1 looked up from its photos: a
+/// direct copy, written by Ada Sprocket.
+fn first_copy() -> Draft {
+    let provider = Scripted::new(vec![
+        answered(robot_cover()),
+        researched(2),
+        answered(photo_structured(&[
+            ("series", value("Astonishing Robot Tales", 1, "high")),
+            ("start_year", value("1954", 1, "high")),
+            ("story_title", value("The Robot Who Read Comics", 1, "high")),
+            ("distribution", value("direct", 8, "high")),
+        ])),
+        no_problems(),
+    ]);
+    run_covers(&provider, false).0.unwrap()
+}
+
+fn look_up_further_copy(provider: &Scripted, known: &Draft) -> Result<Draft, LookupError> {
+    let settings = Settings::balanced(YEAR);
+    let cancel = AtomicBool::new(false);
+    let mut spent = Spent::default();
+    let covers = covers(false);
+    let reading = read_covers(provider, &covers, &settings, &cancel, &mut spent)?;
+    look_up_copy(
+        provider, None, &covers, &reading, known, &settings, &cancel, &mut spent,
+    )
+}
+
+#[test]
+fn a_further_copy_is_looked_up_only_for_its_edition() {
+    let known = first_copy();
+    let provider = Scripted::new(vec![
+        answered(robot_cover()),
+        researched(2),
+        answered(photo_structured(&[
+            ("series", value("Astonishing Robot Tales", 1, "high")),
+            ("start_year", value("1954", 1, "high")),
+            ("story_title", value("Another Title", 2, "high")),
+            ("distribution", value("newsstand", 2, "high")),
+        ])),
+        no_problems(),
+    ]);
+    let draft = look_up_further_copy(&provider, &known).unwrap();
+    // Its own edition, and the issue's facts as the first copy has them.
+    assert_eq!(draft.value("distribution").unwrap().text, "newsstand");
+    assert_eq!(
+        draft.value("story_title").unwrap().text,
+        "The Robot Who Read Comics"
+    );
+    let research = &provider.research_asked.borrow()[0];
+    assert_eq!(research.max_searches, 3);
+    assert_eq!(research.max_pages, 2);
+    assert!(
+        research
+            .system
+            .contains("only on which edition this copy is")
+    );
+    assert!(research.system.contains("- distribution:"));
+    assert!(!research.system.contains("- story_title:"));
+    assert!(research.user.contains(
+        "already catalogued this issue from another copy: Astonishing Robot Tales (1954) #1"
+    ));
+}
+
+#[test]
+fn a_further_copy_found_to_be_another_issue_is_looked_up_in_full() {
+    let known = first_copy();
+    let provider = Scripted::new(vec![
+        answered(robot_cover()),
+        researched(2),
+        answered(photo_structured(&[
+            ("series", value("Astonishing Robot Tales", 1, "high")),
+            ("start_year", value("1975", 1, "high")),
+        ])),
+        no_problems(),
+        researched(2),
+        answered(photo_structured(&[
+            ("series", value("Astonishing Robot Tales", 1, "high")),
+            ("start_year", value("1975", 1, "high")),
+            ("story_title", value("Robots Return", 2, "high")),
+        ])),
+        no_problems(),
+    ]);
+    let draft = look_up_further_copy(&provider, &known).unwrap();
+    assert_eq!(draft.value("start_year").unwrap().text, "1975");
+    assert_eq!(draft.value("story_title").unwrap().text, "Robots Return");
+    let research = provider.research_asked.borrow();
+    assert_eq!(research.len(), 2);
+    assert_eq!(research[1].max_searches, 8);
+    assert!(!research[1].user.contains("already catalogued"));
+}
+
+/// Answers every photo lookup as Astonishing Robot Tales #1, from any
+/// thread, a full research taking long enough for books to overlap, and
+/// counts the research of each kind.
+#[derive(Default)]
+struct Copies {
+    full: std::sync::atomic::AtomicUsize,
+    edition: std::sync::atomic::AtomicUsize,
+}
+
+impl Provider for Copies {
+    fn research(&self, request: &ResearchRequest, _: &AtomicBool) -> Reply<Research> {
+        if request.user.contains("already catalogued") {
+            self.edition.fetch_add(1, Ordering::SeqCst);
+        } else {
+            self.full.fetch_add(1, Ordering::SeqCst);
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        match researched(2) {
+            Step::Research(reply) => reply,
+            Step::Answer(_) => unreachable!(),
+        }
+    }
+
+    fn answer(&self, request: &SchemaRequest, _: &AtomicBool) -> Reply<String> {
+        let json = match request.name {
+            "cover" => robot_cover(),
+            "book" => photo_structured(&[
+                ("series", value("Astonishing Robot Tales", 1, "high")),
+                ("start_year", value("1954", 1, "high")),
+            ]),
+            _ => json!({"problems": []}),
+        };
+        Reply {
+            answer: Ok(json.to_string()),
+            spent: spent(2),
+        }
+    }
+}
+
+#[test]
+fn copies_in_one_run_or_already_looked_up_are_looked_up_for_their_editions() {
+    use crate::queue::{Item, RunOptions, run};
+    let options = RunOptions {
+        workers: 3,
+        ..RunOptions::new(Settings::balanced(YEAR))
+    };
+    let two = [Item::Covers(covers(false)), Item::Covers(covers(false))];
+    let provider = Copies::default();
+    let summary = run(
+        &provider,
+        None,
+        &[],
+        &two,
+        &options,
+        &AtomicBool::new(false),
+        &|_| {},
+    )
+    .unwrap();
+    assert_eq!(summary.finished, 2);
+    assert_eq!(provider.full.load(Ordering::SeqCst), 1);
+    assert_eq!(provider.edition.load(Ordering::SeqCst), 1);
+
+    let provider = Copies::default();
+    let known = [first_copy()];
+    run(
+        &provider,
+        None,
+        &known,
+        &two[..1],
+        &options,
+        &AtomicBool::new(false),
+        &|_| {},
+    )
+    .unwrap();
+    assert_eq!(provider.full.load(Ordering::SeqCst), 0);
+    assert_eq!(provider.edition.load(Ordering::SeqCst), 1);
+
+    // Where the cost limit leaves no room for a second lookup, should the
+    // copy prove to be of another issue, it is looked up in full.
+    let most = Picodollars(20 * 10_000_000_000);
+    let tight = RunOptions {
+        cost_limit: Some((most, most)),
+        ..options
+    };
+    let provider = Copies::default();
+    run(
+        &provider,
+        None,
+        &known,
+        &two[..1],
+        &tight,
+        &AtomicBool::new(false),
+        &|_| {},
+    )
+    .unwrap();
+    assert_eq!(provider.full.load(Ordering::SeqCst), 1);
+    assert_eq!(provider.edition.load(Ordering::SeqCst), 0);
+}
+
 #[test]
 fn the_cover_is_read_and_then_looked_up_like_a_line() {
     let provider = Scripted::new(vec![

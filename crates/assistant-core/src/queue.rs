@@ -1,13 +1,20 @@
 //! Running a batch of lookups: a few books at once, one request each at a
 //! time, with progress as each starts and ends, cancelling between books,
 //! and an optional cost limit the run never passes.
+//!
+//! A photographed copy of an issue already looked up, in the owner's
+//! results or earlier in the run, is looked up only for its edition. A
+//! copy whose issue another book of the run is being looked up as waits
+//! for that lookup rather than repeat it.
 
-use std::sync::Mutex;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Condvar, Mutex};
 
 use crate::lines::BookQuery;
 use crate::lookup::{
-    Catalog, Covers, Draft, LookupError, Provider, Settings, Spent, look_up, look_up_covers,
+    Catalog, Covers, Draft, Identity, LookupError, Provider, Settings, Spent, copy_key,
+    covers_query, look_up, look_up_copy, look_up_read, read_covers,
 };
 use crate::money::Picodollars;
 
@@ -92,8 +99,18 @@ impl std::fmt::Display for RunError {
 
 impl std::error::Error for RunError {}
 
+/// An issue a further copy can take its facts from.
+enum Issue {
+    /// Being looked up by another book of the run.
+    Pending,
+    /// Looked up, or failed to be.
+    Done(Option<Box<Draft>>),
+}
+
 #[derive(Default)]
 struct Shared {
+    /// The issues looked up, by [`copy_key`].
+    issues: HashMap<String, Issue>,
     next: usize,
     /// Set once the provider refuses the key or account, after which no
     /// other book is started: each would be refused the same way.
@@ -105,11 +122,13 @@ struct Shared {
 
 /// Looks up `items`, asking `catalog` first where the owner has one,
 /// and reports each book's progress through `event`, from whichever
-/// thread looked it up. Returns once every book has finished or been
-/// skipped.
+/// thread looked it up. `known` are books already looked up, whose
+/// further copies need only their editions found. Returns once every
+/// book has finished or been skipped.
 pub fn run(
     provider: &(dyn Provider + Sync),
     catalog: Option<&dyn Catalog>,
+    known: &[Draft],
     items: &[Item],
     options: &RunOptions,
     cancel: &AtomicBool,
@@ -122,7 +141,17 @@ pub fn run(
             batch,
         });
     }
-    let shared = Mutex::new(Shared::default());
+    let mut issues = HashMap::new();
+    for draft in known.iter().filter(|d| d.identity == Identity::Identified) {
+        issues
+            .entry(copy_key(&draft.query))
+            .or_insert_with(|| Issue::Done(Some(Box::new(draft.clone()))));
+    }
+    let shared = Mutex::new(Shared {
+        issues,
+        ..Shared::default()
+    });
+    let done = Condvar::new();
     let workers = options
         .workers
         .clamp(1, MAX_WORKERS)
@@ -171,11 +200,12 @@ pub fn run(
                             cancel,
                             &mut spent,
                         ),
-                        Item::Covers(covers) => look_up_covers(
+                        Item::Covers(covers) => look_up_photographed(
                             provider,
                             catalog,
                             covers,
-                            &options.settings,
+                            options,
+                            (&shared, &done),
                             cancel,
                             &mut spent,
                         ),
@@ -213,6 +243,83 @@ pub fn run(
         .into_inner()
         .unwrap_or_else(|e| e.into_inner())
         .summary)
+}
+
+/// Looks up a book from its photos, as a further copy where its issue is
+/// known or being looked up, and otherwise in full, then makes it known
+/// for further copies.
+#[allow(clippy::too_many_arguments)]
+fn look_up_photographed(
+    provider: &dyn Provider,
+    catalog: Option<&dyn Catalog>,
+    covers: &Covers,
+    options: &RunOptions,
+    (shared, done): (&Mutex<Shared>, &Condvar),
+    cancel: &AtomicBool,
+    spent: &mut Spent,
+) -> Result<Draft, LookupError> {
+    let settings = &options.settings;
+    let reading = read_covers(provider, covers, settings, cancel, spent)?;
+    // A series the owner picked is looked up as they picked it.
+    if covers.chosen.is_some() {
+        return look_up_read(provider, catalog, covers, &reading, settings, cancel, spent);
+    }
+    let key = copy_key(&covers_query(covers, &reading)?);
+    let lock = || shared.lock().unwrap_or_else(|e| e.into_inner());
+    let mut s = lock();
+    let known = loop {
+        match s.issues.get(&key) {
+            Some(Issue::Done(known)) => break Some(known.clone()),
+            Some(Issue::Pending) => s = done.wait(s).unwrap_or_else(|e| e.into_inner()),
+            None => {
+                s.issues.insert(key.clone(), Issue::Pending);
+                break None;
+            }
+        }
+    };
+    // Should the copy turn out to be of another issue, it is looked up in
+    // full as well, so it may cost two lookups: the second is set aside
+    // first, and where the cost limit has no room for it, the copy is
+    // looked up in full at once.
+    let extra = options.cost_limit.map_or(0, |(_, most)| most.0);
+    let known = known.flatten().filter(|_| {
+        let room = options.cost_limit.is_none_or(|(limit, _)| {
+            s.summary
+                .spent
+                .cost
+                .0
+                .saturating_add(s.set_aside)
+                .saturating_add(extra)
+                <= limit.0
+        });
+        if room {
+            s.set_aside = s.set_aside.saturating_add(extra);
+        }
+        room
+    });
+    drop(s);
+    let result = match &known {
+        Some(known) => {
+            let result = look_up_copy(
+                provider, catalog, covers, &reading, known, settings, cancel, spent,
+            );
+            let mut s = lock();
+            s.set_aside = s.set_aside.saturating_sub(extra);
+            result
+        }
+        None => look_up_read(provider, catalog, covers, &reading, settings, cancel, spent),
+    };
+    let mut s = lock();
+    if matches!(s.issues.get(&key), Some(Issue::Pending)) {
+        let found = result
+            .as_ref()
+            .ok()
+            .filter(|d| d.identity == Identity::Identified)
+            .map(|d| Box::new(d.clone()));
+        s.issues.insert(key, Issue::Done(found));
+        done.notify_all();
+    }
+    result
 }
 
 #[cfg(test)]
@@ -278,7 +385,7 @@ mod tests {
         cancel: &AtomicBool,
     ) -> (Result<Summary, RunError>, Vec<String>) {
         let log = Mutex::new(Vec::new());
-        let result = run(provider, None, queries, options, cancel, &|e| {
+        let result = run(provider, None, &[], queries, options, cancel, &|e| {
             let line = match e {
                 Event::Started(i) => format!("started {i}"),
                 Event::Finished { index, result, .. } => {
@@ -409,6 +516,7 @@ mod tests {
         let summary = run(
             &Refusing,
             None,
+            &[],
             &books(5),
             &options,
             &AtomicBool::new(false),
