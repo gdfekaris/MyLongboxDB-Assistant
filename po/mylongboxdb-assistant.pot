@@ -9,7 +9,7 @@ msgstr ""
 "Project-Id-Version: mylongboxdb-assistant\n"
 "Report-Msgid-Bugs-To: https://github.com/gdfekaris/MyLongboxDB-Assistant/"
 "issues\n"
-"POT-Creation-Date: 2026-10-28 11:06-0700\n"
+"POT-Creation-Date: 2026-10-29 14:51-0700\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -179,55 +179,55 @@ msgstr ""
 msgid "{count} books to look up"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:108 crates/assistant-app/src/app.rs:1164
-#: crates/assistant-app/src/app.rs:1174
+#: crates/assistant-app/src/app.rs:109 crates/assistant-app/src/app.rs:1201
+#: crates/assistant-app/src/app.rs:1211
 msgid "Main Menu"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:243
+#: crates/assistant-app/src/app.rs:244
 msgid "1 looked-up book from before is waiting for review"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:245
+#: crates/assistant-app/src/app.rs:246
 #, rust-format
 msgid "{count} looked-up books from before are waiting for review"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:252 crates/assistant-app/src/review.rs:719
+#: crates/assistant-app/src/app.rs:253 crates/assistant-app/src/review.rs:797
 msgid "Review"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:298
+#: crates/assistant-app/src/app.rs:314
 #, rust-format
 msgid "The looked-up books could not be saved: {why}"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:372
+#: crates/assistant-app/src/app.rs:388
 #, rust-format
 msgid "Edit {field}"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:381 crates/assistant-app/src/app.rs:449
-#: crates/assistant-app/src/app.rs:796 crates/assistant-app/src/app.rs:953
-#: crates/assistant-app/src/app.rs:1002 crates/assistant-app/src/app.rs:1047
+#: crates/assistant-app/src/app.rs:397 crates/assistant-app/src/app.rs:465
+#: crates/assistant-app/src/app.rs:821 crates/assistant-app/src/app.rs:990
+#: crates/assistant-app/src/app.rs:1039 crates/assistant-app/src/app.rs:1084
 #: crates/assistant-app/src/catalogue.rs:149
 #: crates/assistant-app/src/photo_editor.rs:565
 #: crates/assistant-app/src/run.rs:242
 msgid "_Cancel"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:381
+#: crates/assistant-app/src/app.rs:397
 #: crates/assistant-app/src/photo_editor.rs:567
 msgid "_Save"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:400
+#: crates/assistant-app/src/app.rs:416
 msgid ""
 "One book is still being looked up. It is lost if you close now, with what "
 "its lookup has cost so far. Books already looked up are kept for review."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:405
+#: crates/assistant-app/src/app.rs:421
 #, rust-format
 msgid ""
 "{count} books are still waiting or being looked up. They are lost if you "
@@ -235,36 +235,36 @@ msgid ""
 "looked up are kept for review."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:412
+#: crates/assistant-app/src/app.rs:428
 msgid "Stop Looking Up?"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:418
+#: crates/assistant-app/src/app.rs:434
 msgid "_Keep Looking Up"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:419
+#: crates/assistant-app/src/app.rs:435
 msgid "_Close Anyway"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:442
+#: crates/assistant-app/src/app.rs:458
 msgid "Discard This Book?"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:444
+#: crates/assistant-app/src/app.rs:460
 msgid ""
 "Its looked-up details are deleted. Looking it up again costs as much again."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:450
+#: crates/assistant-app/src/app.rs:466
 msgid "_Discard"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:489
+#: crates/assistant-app/src/app.rs:505
 msgid "Grades run from 0.5 to 10.0, in tenths, such as 9.4"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:582
+#: crates/assistant-app/src/app.rs:607
 msgid ""
 "Download the SQLite data dump from comics.org/download (a free account is "
 "needed), then choose the zip or the .db file here. Reading it takes a minute "
@@ -274,47 +274,47 @@ msgid ""
 "Grand Comics Database's, shared under the CC BY-SA 4.0 license."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:594
+#: crates/assistant-app/src/app.rs:619
 msgid ""
 "Lookups can check your own copy of the Grand Comics Database before they "
 "search the web, for each issue's editions, dates, prices, credits, and "
 "characters."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:601
+#: crates/assistant-app/src/app.rs:626
 msgid "Grand Comics Database"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:606 crates/assistant-app/src/app.rs:669
+#: crates/assistant-app/src/app.rs:631 crates/assistant-app/src/app.rs:694
 msgid "_Close"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:608
+#: crates/assistant-app/src/app.rs:633
 msgid "_Remove…"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:610
+#: crates/assistant-app/src/app.rs:635
 msgid "Choose a _Newer File…"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:612
+#: crates/assistant-app/src/app.rs:637
 msgid "_Choose File…"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:635
+#: crates/assistant-app/src/app.rs:660
 msgid "The file could not be opened."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:655
+#: crates/assistant-app/src/app.rs:680
 #, rust-format
 msgid "The Grand Comics Database could not be added: {why}"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:694
+#: crates/assistant-app/src/app.rs:719
 msgid "Some Books Would Not Import"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:696
+#: crates/assistant-app/src/app.rs:721
 #, rust-format
 msgid ""
 "Correct these books, or leave them out of the export:\n"
@@ -322,127 +322,127 @@ msgid ""
 "{books}"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:711
+#: crates/assistant-app/src/app.rs:736
 msgid "Export"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:736
+#: crates/assistant-app/src/app.rs:761
 msgid "the export could not be made"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:766
+#: crates/assistant-app/src/app.rs:791
 #, rust-format
 msgid ""
 "With {model}, this should cost about {likely}, and at most {most}, web "
 "searches included."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:775
+#: crates/assistant-app/src/app.rs:800
 #, rust-format
 msgid "The cost with {model} is not known in advance."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:781
+#: crates/assistant-app/src/app.rs:806
 #, rust-format
 msgid "{cost} Type your passphrase to start."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:787
+#: crates/assistant-app/src/app.rs:812
 msgid "Look Up 1 Book?"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:789
+#: crates/assistant-app/src/app.rs:814
 #, rust-format
 msgid "Look Up {count} Books?"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:797
+#: crates/assistant-app/src/app.rs:822
 msgid "_Look Up"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:801 crates/assistant-app/src/setup.rs:414
+#: crates/assistant-app/src/app.rs:826 crates/assistant-app/src/setup.rs:414
 #: crates/assistant-app/src/unlock.rs:40
 msgid "Passphrase"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:851
+#: crates/assistant-app/src/app.rs:876
 msgid "There is no key for this provider; set the app up again."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:931
+#: crates/assistant-app/src/app.rs:968
 msgid "New passphrase"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:935
+#: crates/assistant-app/src/app.rs:972
 msgid "New passphrase again"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:945
+#: crates/assistant-app/src/app.rs:982
 msgid "Change Passphrase"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:946
+#: crates/assistant-app/src/app.rs:983
 msgid "At least 12 characters, typed twice."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:954
+#: crates/assistant-app/src/app.rs:991
 msgid "C_hange"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:994
+#: crates/assistant-app/src/app.rs:1031
 msgid "Remove the Saved Key?"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:996
+#: crates/assistant-app/src/app.rs:1033
 msgid ""
 "The encrypted key file is deleted, and you set the app up again with a key. "
 "The key itself stays valid at your provider until you revoke it there."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1003 crates/assistant-app/src/app.rs:1048
+#: crates/assistant-app/src/app.rs:1040 crates/assistant-app/src/app.rs:1085
 msgid "_Remove"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1039
+#: crates/assistant-app/src/app.rs:1076
 msgid "Remove Your Copy of the Grand Comics Database?"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1041
+#: crates/assistant-app/src/app.rs:1078
 msgid ""
 "Its index is deleted, and lookups search the web alone. You can add it again "
 "from the dump at any time."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1061
+#: crates/assistant-app/src/app.rs:1098
 msgid "The passphrase is wrong, or the key file is damaged."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1063
+#: crates/assistant-app/src/app.rs:1100
 msgid "The key file was saved by a newer version of the app."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1065
+#: crates/assistant-app/src/app.rs:1102
 msgid "The system could not supply random numbers."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1069
+#: crates/assistant-app/src/app.rs:1106
 #, rust-format
 msgid "The key file could not be read or saved: {why}"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1091
+#: crates/assistant-app/src/app.rs:1128
 msgid "the limit on network ports"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1094
+#: crates/assistant-app/src/app.rs:1131
 msgid "the limits on changing files and on network ports"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1098
+#: crates/assistant-app/src/app.rs:1135
 msgid "the filter on kinds of network connection"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1110
+#: crates/assistant-app/src/app.rs:1147
 #, rust-format
 msgid ""
 "This system does not support some of the app's own protections: {missing}. "
@@ -450,130 +450,130 @@ msgid ""
 msgstr ""
 
 #. Translators: joins two protections in the list above.
-#: crates/assistant-app/src/app.rs:1112
+#: crates/assistant-app/src/app.rs:1149
 msgid " and "
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1127
+#: crates/assistant-app/src/app.rs:1164
 msgid "MyLongboxDB Assistant"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1142
+#: crates/assistant-app/src/app.rs:1179
 msgid "_Lock"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1144
+#: crates/assistant-app/src/app.rs:1181
 msgid "Change _Passphrase…"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1147
+#: crates/assistant-app/src/app.rs:1184
 msgid "_Set Up Again…"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1148
+#: crates/assistant-app/src/app.rs:1185
 msgid "_Remove Saved Key…"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1150
+#: crates/assistant-app/src/app.rs:1187
 msgid "_Grand Comics Database…"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1155
+#: crates/assistant-app/src/app.rs:1192
 msgid "_About MyLongboxDB Assistant"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1185
+#: crates/assistant-app/src/app.rs:1222
 msgid "_Review"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1200
+#: crates/assistant-app/src/app.rs:1237
 msgid "_Dismiss"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1366
+#: crates/assistant-app/src/app.rs:1408
 #, rust-format
 msgid "The saved looked-up books could not be read and were set aside: {why}"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1414
+#: crates/assistant-app/src/app.rs:1456
 #, rust-format
 msgid "Your choices could not be saved: {why}"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1425
+#: crates/assistant-app/src/app.rs:1467
 #, rust-format
 msgid "The key could not be saved: {why}"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1475
+#: crates/assistant-app/src/app.rs:1517
 msgid "Locked after a quarter of an hour unused."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1483
+#: crates/assistant-app/src/app.rs:1525
 msgid "Unlock first, then change the passphrase."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1499
+#: crates/assistant-app/src/app.rs:1541
 msgid "The passphrase is changed."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1640
+#: crates/assistant-app/src/app.rs:1683
 #, rust-format
 msgid "“{text}” is not a cover date, such as Apr 1990"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1674
+#: crates/assistant-app/src/app.rs:1723
 msgid "Could Not Export"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1676
+#: crates/assistant-app/src/app.rs:1725
 #, rust-format
 msgid "Nothing was exported, and the books are still here: {why}"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1692
+#: crates/assistant-app/src/app.rs:1741
 msgid "1 book was exported."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1695
+#: crates/assistant-app/src/app.rs:1744
 #, rust-format
 msgid "{count} books were exported."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1700
+#: crates/assistant-app/src/app.rs:1749
 #, rust-format
 msgid ""
 "{exported} In MyLongboxDB, choose Import Books and pick the file; it shows "
 "what will be added before anything is."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1707
+#: crates/assistant-app/src/app.rs:1756
 #, rust-format
 msgid "{unticked} values you did not tick were left out."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1711
+#: crates/assistant-app/src/app.rs:1760
 msgid "Export Saved"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1749
+#: crates/assistant-app/src/app.rs:1798
 msgid "Grand Comics Database Added"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1751
+#: crates/assistant-app/src/app.rs:1800
 #, rust-format
 msgid "{copy} Lookups check it before searching the web."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1763
+#: crates/assistant-app/src/app.rs:1812
 msgid "Could Not Add the Grand Comics Database"
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1772
+#: crates/assistant-app/src/app.rs:1821
 msgid "Your copy of the Grand Comics Database is removed."
 msgstr ""
 
-#: crates/assistant-app/src/app.rs:1775
+#: crates/assistant-app/src/app.rs:1824
 #, rust-format
 msgid "Your copy of the Grand Comics Database could not be removed: {why}"
 msgstr ""
@@ -818,370 +818,414 @@ msgstr ""
 msgid "A book's back cover is one photo; drop the photos one at a time."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:66
+#: crates/assistant-app/src/review.rs:70
 msgid "Not graded"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:67
+#: crates/assistant-app/src/review.rs:71
 msgid "My own estimate"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:78
+#: crates/assistant-app/src/review.rs:82
 msgid "This Copy"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:81
+#: crates/assistant-app/src/review.rs:85
 msgid "Grade (0.5 to 10.0)"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:106
+#: crates/assistant-app/src/review.rs:110
 msgid "Graded By"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:118
+#: crates/assistant-app/src/review.rs:122
 msgid "Certificate Number"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:148
+#: crates/assistant-app/src/review.rs:152
 msgid "Writer"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:149
+#: crates/assistant-app/src/review.rs:153
 msgid "Artist"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:150
+#: crates/assistant-app/src/review.rs:154
 msgid "Penciller"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:151
+#: crates/assistant-app/src/review.rs:155
 msgid "Inker"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:152
+#: crates/assistant-app/src/review.rs:156
 msgid "Colorist"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:153
+#: crates/assistant-app/src/review.rs:157
 msgid "Letterer"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:154
+#: crates/assistant-app/src/review.rs:158
 msgid "Cover artist"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:155
+#: crates/assistant-app/src/review.rs:159
 msgid "Editor"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:156
+#: crates/assistant-app/src/review.rs:160
 msgid "Article"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:157
+#: crates/assistant-app/src/review.rs:161
 msgid "Interview"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:165
+#: crates/assistant-app/src/review.rs:169
 msgid "Without its start year or volume, and without a leading The."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:166
+#: crates/assistant-app/src/review.rs:170
 msgid "The year of the series' first issue, such as 1963."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:167
+#: crates/assistant-app/src/review.rs:171
 msgid "Such as 300 or 1/2, or nn for a book with no number."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:168
+#: crates/assistant-app/src/review.rs:172
 msgid "Only where the publisher numbers the series as a volume."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:169
+#: crates/assistant-app/src/review.rs:173
 msgid "Such as Marvel Comics or DC."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:170
+#: crates/assistant-app/src/review.rs:174
 msgid "Such as Vertigo or Epic."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:171
+#: crates/assistant-app/src/review.rs:175
 msgid "comic, magazine, or collected."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:172
+#: crates/assistant-app/src/review.rs:176
 msgid "standard, treasury, or digest."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:173
-#: crates/assistant-app/src/review.rs:181
+#: crates/assistant-app/src/review.rs:177
+#: crates/assistant-app/src/review.rs:185
 msgid "yes or no."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:174
+#: crates/assistant-app/src/review.rs:178
 msgid "Only for a series that has ended."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:175
+#: crates/assistant-app/src/review.rs:179
 msgid "Only where the publisher printed one."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:176
+#: crates/assistant-app/src/review.rs:180
 msgid "The main story's title, as printed."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:177
+#: crates/assistant-app/src/review.rs:181
 msgid "Such as Apr 1990, or just the year."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:178
+#: crates/assistant-app/src/review.rs:182
 msgid "Such as 1990-02-13."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:179
+#: crates/assistant-app/src/review.rs:183
 msgid "Including the covers."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:180
+#: crates/assistant-app/src/review.rs:184
 msgid "A few short sentences."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:182
+#: crates/assistant-app/src/review.rs:186
 msgid "Such as: 1st appearance of Venom."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:183
+#: crates/assistant-app/src/review.rs:187
 msgid "In US dollars, such as 1.50."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:184
+#: crates/assistant-app/src/review.rs:188
 msgid "In Canadian dollars, such as 2.00."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:185
+#: crates/assistant-app/src/review.rs:189
 msgid "The 13-digit ISBN."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:186
+#: crates/assistant-app/src/review.rs:190
 msgid "hardcover, softcover, or oversized_hardcover."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:187
+#: crates/assistant-app/src/review.rs:191
 msgid "Such as: Watchmen (1986) 1-12."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:189
+#: crates/assistant-app/src/review.rs:193
 msgid ""
 "Such as Okazaki cover, Facsimile, or KRS Comics exclusive. Blank for the "
 "standard cover."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:191
+#: crates/assistant-app/src/review.rs:195
 msgid "Separate names with semicolons."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:192
+#: crates/assistant-app/src/review.rs:196
 msgid "1 for the first printing, 2 for the second."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:193
+#: crates/assistant-app/src/review.rs:197
 msgid "direct or newsstand."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:194
+#: crates/assistant-app/src/review.rs:198
 msgid "When this printing came out, such as 1992-06."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:195
+#: crates/assistant-app/src/review.rs:199
 msgid "Every digit, add-on included."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:220
+#: crates/assistant-app/src/review.rs:224
 msgid "Sure"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:221
+#: crates/assistant-app/src/review.rs:225
 msgid "Fairly sure"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:222
+#: crates/assistant-app/src/review.rs:226
 msgid "Unsure"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:237
+#: crates/assistant-app/src/review.rs:241
 msgid "How sure the lookup is"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:254
+#: crates/assistant-app/src/review.rs:258
 msgid "From your cover photo"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:260
+#: crates/assistant-app/src/review.rs:264
 msgid "From Claude's knowledge, not a page"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:264
+#: crates/assistant-app/src/review.rs:268
 msgid "From your copy of the Grand Comics Database"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:267
+#: crates/assistant-app/src/review.rs:271
 #, rust-format
 msgid "From {site}"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:272
+#: crates/assistant-app/src/review.rs:276
 msgid "Your own value"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:310
-#: crates/assistant-app/src/review.rs:430
-#: crates/assistant-app/src/review.rs:773
+#: crates/assistant-app/src/review.rs:314
+#: crates/assistant-app/src/review.rs:490
+#: crates/assistant-app/src/review.rs:863
 msgid "Include in the export"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:313
+#: crates/assistant-app/src/review.rs:317
 msgid "To look at"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:364
+#: crates/assistant-app/src/review.rs:368
 msgid "Edit"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:385
+#: crates/assistant-app/src/review.rs:389
 msgid "First appearance"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:388
+#: crates/assistant-app/src/review.rs:392
 #, rust-format
 msgid "Part {part}"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:411
+#: crates/assistant-app/src/review.rs:415
 msgid "Ready"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:412
+#: crates/assistant-app/src/review.rs:416
 #, rust-format
 msgid "{n} to look at"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:414
+#: crates/assistant-app/src/review.rs:418
 msgid "Which series? Pick one"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:415 crates/assistant-app/src/run.rs:214
+#: crates/assistant-app/src/review.rs:419 crates/assistant-app/src/run.rs:214
 msgid "No matching issue found"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:416 crates/assistant-app/src/run.rs:215
+#: crates/assistant-app/src/review.rs:420 crates/assistant-app/src/run.rs:215
 msgid "No reliable sources found"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:442
-#: crates/assistant-app/src/review.rs:782
-msgid "Reviewed"
+#: crates/assistant-app/src/review.rs:428
+msgid "Standard cover"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:443
-msgid "Tick once you have looked this book over"
+#: crates/assistant-app/src/review.rs:433
+#, rust-format
+msgid "printing {n}"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:436
+msgid "direct"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:437
+msgid "newsstand"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:451
+msgid "Other Copies of This Issue"
 msgstr ""
 
 #: crates/assistant-app/src/review.rs:453
+msgid "Share the Issue's Details"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:455
+msgid "Copies of one issue have the same details; only their editions differ"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:502
+#: crates/assistant-app/src/review.rs:872
+msgid "Reviewed"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:503
+msgid "Tick once you have looked this book over"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:513
 msgid "Discard This Book"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:465
+#: crates/assistant-app/src/review.rs:525
 msgid "Front cover"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:466
+#: crates/assistant-app/src/review.rs:526
 msgid "Back cover"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:482
+#: crates/assistant-app/src/review.rs:542
 msgid "Your Photos"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:504
+#: crates/assistant-app/src/review.rs:567
 msgid "Details"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:506
+#: crates/assistant-app/src/review.rs:569
 msgid "Ticked values go into the export; unticked ones are left out."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:533
+#: crates/assistant-app/src/review.rs:572
+msgid ""
+"Ticked values go into the export; unticked ones are left out. These are the "
+"issue's, so ticking or editing one here does the same for the other copies."
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:577
+msgid "This Copy's Edition"
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:579
+msgid ""
+"This copy's own: which cover and printing it is, and its prices and barcode."
+msgstr ""
+
+#: crates/assistant-app/src/review.rs:599
 msgid "Credits"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:534
+#: crates/assistant-app/src/review.rs:600
 msgid "Characters"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:535
+#: crates/assistant-app/src/review.rs:601
 msgid "Teams"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:536
+#: crates/assistant-app/src/review.rs:602
 msgid "Story arcs"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:549
+#: crates/assistant-app/src/review.rs:627
 msgid "Blank fields"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:550
+#: crates/assistant-app/src/review.rs:628
 msgid "Left blank by the lookup; you can fill them in"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:566
+#: crates/assistant-app/src/review.rs:644
 msgid "Which Series Did You Mean?"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:568
+#: crates/assistant-app/src/review.rs:646
 msgid "Picking one looks the book up again as that series, at the usual cost."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:585
+#: crates/assistant-app/src/review.rs:663
 msgid "Look Up This One"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:598
+#: crates/assistant-app/src/review.rs:676
 msgid "Check the line's series and number, or look it up again later."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:607
+#: crates/assistant-app/src/review.rs:685
 msgid "Sources"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:608
+#: crates/assistant-app/src/review.rs:686
 msgid "The pages the lookup cited, shown as text"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:616
+#: crates/assistant-app/src/review.rs:694
 msgid "Data from the Grand Comics Database, CC BY-SA 4.0"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:635
+#: crates/assistant-app/src/review.rs:713
 msgid "Research notes"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:701
+#: crates/assistant-app/src/review.rs:779
 msgid "_Export…"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:706
+#: crates/assistant-app/src/review.rs:784
 msgid "_Add Books"
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:797
+#: crates/assistant-app/src/review.rs:887
 #, rust-format
 msgid ""
 "1 looked-up book, {included} included in the export, {reviewed} reviewed."
 msgstr ""
 
-#: crates/assistant-app/src/review.rs:805
+#: crates/assistant-app/src/review.rs:895
 #, rust-format
 msgid ""
 "{count} looked-up books, {included} included in the export, {reviewed} "
