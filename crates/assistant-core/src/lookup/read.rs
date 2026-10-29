@@ -331,13 +331,20 @@ const SPELLED: [&str; 20] = [
 
 /// An issue number as printed, without the marks that only label it,
 /// and as it is catalogued: in digits, without the leading zeros some
-/// covers print, as 010 for #10.
+/// covers print, as 010 for #10, and without a limited series' count,
+/// as 1 of 6 for #1.
 fn issue_number(printed: &str) -> String {
     let mut text = printed.trim();
     for mark in ["#", "No.", "No ", "Number "] {
         if let Some(rest) = text.strip_prefix(mark) {
             text = rest.trim_start();
         }
+    }
+    if let Some((number, count)) = text.split_once(" of ")
+        && !count.is_empty()
+        && count.bytes().all(|b| b.is_ascii_digit())
+    {
+        text = number.trim_end();
     }
     if let Some(n) = SPELLED.iter().position(|w| w.eq_ignore_ascii_case(text)) {
         return (n + 1).to_string();
@@ -365,6 +372,9 @@ mod tests {
         assert_eq!(issue_number("ONE"), "1");
         assert_eq!(issue_number("Twelve"), "12");
         assert_eq!(issue_number("One-Shot"), "One-Shot");
+        assert_eq!(issue_number("1 of 6"), "1");
+        assert_eq!(issue_number("#04 of 12"), "4");
+        assert_eq!(issue_number("One of Four"), "One of Four");
     }
 
     #[test]
