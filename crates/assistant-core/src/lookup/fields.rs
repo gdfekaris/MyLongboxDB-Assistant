@@ -84,7 +84,7 @@ pub const FIELDS: &[Field] = &[
         "series",
         "Series",
         Kind::Text,
-        "The name the Grand Comics Database files the whole series under, or failing that the publisher's, without its year or volume, and without a leading The. Keep it even where this issue's cover logo or the publisher's site gives a longer title for some issues. Keep a slash the title has, as in Batman/Spawn: War Devil, with its parts in the order the cover prints them. A translated edition goes by the title its own cover prints. A one-shot's own title, such as Giant Superhero Holiday Grab-Bag, is its story title, not part of the series.",
+        "The name the Grand Comics Database files the whole series under, or failing that the publisher's, without its year or volume, and without a leading The. Keep it even where this issue's cover logo or the publisher's site gives a longer title for some issues. Keep a slash the title has, as in Batman/Spawn: War Devil, with its parts in the order the cover prints them. A translated edition goes by the title its own cover prints. Spell out an abbreviated title, as Teenage Mutant Ninja Turtles: The Last Ronin for TMNT: The Last Ronin. A one-shot's own title, such as Giant Superhero Holiday Grab-Bag, is its story title, not part of the series.",
     ),
     field(
         "start_year",
@@ -261,17 +261,40 @@ pub const FIELDS: &[Field] = &[
 /// A value as the owner's collection writes it: series without a leading
 /// The, and publishers by the names the collection already uses. Applied
 /// after the check, which compares values with their sources' own words.
+/// Titles catalogues and covers abbreviate, which the collection spells
+/// out.
+const ABBREVIATED: [(&str, &str); 1] = [("TMNT", "Teenage Mutant Ninja Turtles")];
+
+/// A title with its abbreviations spelled out, word by word, keeping the
+/// punctuation after each.
+pub(crate) fn spelled_out(title: &str) -> String {
+    title
+        .split(' ')
+        .map(|word| {
+            let bare = word.trim_end_matches([':', ',', '.']);
+            match ABBREVIATED
+                .iter()
+                .find(|(short, _)| bare.eq_ignore_ascii_case(short))
+            {
+                Some((_, long)) => format!("{long}{}", &word[bare.len()..]),
+                None => word.to_owned(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 pub(crate) fn house_style(key: &str, text: &str) -> String {
     let text = text.trim();
     match key {
         // The catalogue's spaced hyphen stands for the title's slash,
         // which the collection writes unspaced.
-        "series" => match text.get(..4) {
+        "series" => spelled_out(match text.get(..4) {
             Some(the) if the.eq_ignore_ascii_case("the ") && text.len() > 4 => {
-                text[4..].trim_start().to_owned()
+                text[4..].trim_start()
             }
-            _ => text.to_owned(),
-        }
+            _ => text,
+        })
         .replace(" - ", "/")
         .replace(" / ", "/"),
         "publisher" if text.contains(';') => {
@@ -491,6 +514,15 @@ mod tests {
         );
         assert_eq!(house_style("series", "Theatre of Fear"), "Theatre of Fear");
         assert_eq!(house_style("series", "The"), "The");
+        assert_eq!(
+            house_style("series", "TMNT: The Last Ronin"),
+            "Teenage Mutant Ninja Turtles: The Last Ronin"
+        );
+        assert_eq!(
+            house_style("series", "Tmnt Adventures"),
+            "Teenage Mutant Ninja Turtles Adventures"
+        );
+        assert_eq!(house_style("series", "TMNTX"), "TMNTX");
         assert_eq!(house_style("publisher", "Marvel"), "Marvel Comics");
         assert_eq!(
             house_style("publisher", "Marvel Comics Group"),

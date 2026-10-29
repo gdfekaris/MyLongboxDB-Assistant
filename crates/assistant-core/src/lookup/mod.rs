@@ -1113,7 +1113,9 @@ fn facsimile(draft: &mut Draft, reading: &Reading) {
 /// punctuation as spaces, and without a leading The or a trailing
 /// Annual, which the collection adds to an annual's series.
 fn title_key(title: &str) -> String {
-    let lower = title.to_lowercase().replace('&', " and ");
+    let lower = fields::spelled_out(title)
+        .to_lowercase()
+        .replace('&', " and ");
     let spaced: String = lower
         .chars()
         .map(|c| if c.is_alphanumeric() { c } else { ' ' })
