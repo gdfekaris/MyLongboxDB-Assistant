@@ -170,7 +170,7 @@ pub const FIELDS: &[Field] = &[
         "page_count",
         "Pages",
         Kind::Count,
-        "The number of pages, including covers, as the reference source gives it.",
+        "The number of pages of the issue itself, its standard edition, including covers, as the reference source gives it; never a variant's or later printing's.",
     ),
     field(
         "synopsis",

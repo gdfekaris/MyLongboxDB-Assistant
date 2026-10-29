@@ -304,13 +304,47 @@ fn label_number(label: &str) -> Option<String> {
     (!number.is_empty()).then_some(number)
 }
 
-/// An issue number as printed, without the marks that only label it.
+/// Numbers a cover may spell out, as Teenage Mutant Ninja Turtles: The
+/// Last Ronin prints ONE.
+const SPELLED: [&str; 20] = [
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
+    "nineteen",
+    "twenty",
+];
+
+/// An issue number as printed, without the marks that only label it,
+/// and as it is catalogued: in digits, without the leading zeros some
+/// covers print, as 010 for #10.
 fn issue_number(printed: &str) -> String {
     let mut text = printed.trim();
     for mark in ["#", "No.", "No ", "Number "] {
         if let Some(rest) = text.strip_prefix(mark) {
             text = rest.trim_start();
         }
+    }
+    if let Some(n) = SPELLED.iter().position(|w| w.eq_ignore_ascii_case(text)) {
+        return (n + 1).to_string();
+    }
+    if text.len() > 1 && text.bytes().all(|b| b.is_ascii_digit()) {
+        let digits = text.trim_start_matches('0');
+        return if digits.is_empty() { "0" } else { digits }.to_owned();
     }
     text.to_owned()
 }
@@ -325,6 +359,12 @@ mod tests {
         assert_eq!(issue_number("No. 7"), "7");
         assert_eq!(issue_number("Annual 3"), "Annual 3");
         assert_eq!(issue_number(" # 1/2 "), "1/2");
+        assert_eq!(issue_number("010"), "10");
+        assert_eq!(issue_number("00"), "0");
+        assert_eq!(issue_number("0"), "0");
+        assert_eq!(issue_number("ONE"), "1");
+        assert_eq!(issue_number("Twelve"), "12");
+        assert_eq!(issue_number("One-Shot"), "One-Shot");
     }
 
     #[test]

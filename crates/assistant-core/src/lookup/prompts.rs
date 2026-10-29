@@ -5,7 +5,7 @@
 use super::fields::FIELDS;
 
 /// Raised with every change to the texts below.
-pub const PROMPT_VERSION: &str = "2026-10-29.2";
+pub const PROMPT_VERSION: &str = "2026-10-29.3";
 
 /// The read step, for photos: what is printed on the covers, and nothing
 /// looked up or remembered. The items to report follow it.
